@@ -41,14 +41,20 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Same approach as game-ci/unity-builder: take the serial out of the .ulf
+      # (base64 DeveloperData minus its 4-byte prefix) and activate with it.
       - name: Activate Unity license
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
-          for dir in "$HOME/.local/share/unity3d/Unity" "/root/.local/share/unity3d/Unity"; do
-            mkdir -p "$dir"
-            printf '%s' "$UNITY_LICENSE" > "$dir/Unity_lic.ulf"
-          done
+          serial=$(printf '%s' "$UNITY_LICENSE" | sed -n 's/.*<DeveloperData Value="\([^"]*\)".*/\1/p' | base64 -d | tail -c +5)
+          echo "::add-mask::$serial"
+          mkdir -p /BlankProject/Assets
+          unity-editor -batchmode -nographics -quit -logFile /dev/stdout \
+            -serial "$serial" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" \
+            -projectPath /BlankProject
 
       - name: Generate solution
         run: |
@@ -74,3 +80,12 @@ jobs:
             /d:sonar.exclusions="**/InputSystem_Actions.cs"
           dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+      - name: Return Unity license
+        if: always()
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          unity-editor -batchmode -nographics -quit -logFile /dev/stdout -returnlicense \
+            -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" -projectPath /BlankProject
