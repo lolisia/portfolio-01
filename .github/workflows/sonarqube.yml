@@ -1,0 +1,76 @@
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+env:
+  PROJECT_PATH: Client
+  SONAR_ORGANIZATION: lolisia
+  SONAR_PROJECT_KEY: lolisia_portfolio-01
+
+jobs:
+  analyze:
+    name: Analyze C#
+    runs-on: ubuntu-latest
+    # Forked PRs cannot read secrets, so skip them.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Run inside the GameCI editor image so the Unity-generated .csproj reference paths resolve.
+    # Keep the tag in sync with Client/ProjectSettings/ProjectVersion.txt.
+    container: unityci/editor:ubuntu-6000.6.7f1-base-3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # SonarQube needs full history for blame / new-code detection
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-sonar-${{ hashFiles(format('{0}/Assets/**', env.PROJECT_PATH), format('{0}/Packages/**', env.PROJECT_PATH), format('{0}/ProjectSettings/**', env.PROJECT_PATH)) }}
+          restore-keys: Library-sonar-
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Activate Unity license
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          for dir in "$HOME/.local/share/unity3d/Unity" "/root/.local/share/unity3d/Unity"; do
+            mkdir -p "$dir"
+            printf '%s' "$UNITY_LICENSE" > "$dir/Unity_lic.ulf"
+          done
+
+      - name: Generate solution
+        run: |
+          unity-editor -batchmode -nographics -quit -logFile - \
+            -projectPath "$PROJECT_PATH" \
+            -executeMethod Packages.Rider.Editor.RiderScriptEditor.SyncSolution
+          ls "$PROJECT_PATH"/*.sln "$PROJECT_PATH"/*.csproj
+
+      - name: Install SonarScanner for .NET
+        run: |
+          dotnet tool install --global dotnet-sonarscanner
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Build and analyze
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner begin \
+            /k:"$SONAR_PROJECT_KEY" \
+            /o:"$SONAR_ORGANIZATION" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.exclusions="**/InputSystem_Actions.cs"
+          dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug
+          dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
