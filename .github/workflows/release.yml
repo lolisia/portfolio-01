@@ -20,7 +20,7 @@ jobs:
           - StandaloneWindows64
     steps:
       # Unity editor image + Library easily exceed the runner's free disk space.
-      - uses: jlumbroso/free-disk-space@v1.3.1
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: false
 
@@ -31,7 +31,7 @@ jobs:
       # No Library cache: with Unity 6000.6 a restored Library gets the editor SIGKILLed
       # (exit 137) during startup, while clean imports succeed.
 
-      - uses: game-ci/unity-builder@v4
+      - uses: game-ci/unity-builder@4423ee75828dff56037d1d1cfdac6b68e3a6ba00 # v4.8.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -66,7 +66,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: dist/*.zip
           generate_release_notes: true
