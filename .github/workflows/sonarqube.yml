@@ -20,7 +20,9 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     # Run inside the GameCI editor image so the Unity-generated .csproj reference paths resolve.
     # Keep the tag in sync with Client/ProjectSettings/ProjectVersion.txt.
-    container: unityci/editor:ubuntu-6000.6.7f1-base-3
+    container:
+      image: unityci/editor:ubuntu-6000.6.7f1-base-3
+      options: --shm-size=2g # Unity 6 needs >1 GiB shared memory; Docker defaults to 64 MiB
     steps:
       - uses: actions/checkout@v4
         with:
