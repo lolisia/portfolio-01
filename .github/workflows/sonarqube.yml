@@ -22,7 +22,7 @@ jobs:
     # Keep the tag in sync with Client/ProjectSettings/ProjectVersion.txt.
     container:
       image: unityci/editor:ubuntu-6000.6.7f1-base-3
-      options: --shm-size=2g # Unity 6 needs >1 GiB shared memory; Docker defaults to 64 MiB
+      options: --shm-size=4g # Each Unity process maps 1 GiB of shared memory; Docker defaults to 64 MiB
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +60,8 @@ jobs:
 
       - name: Generate solution
         run: |
+          df -h /dev/shm
+          free -m
           unity-editor -batchmode -nographics -quit -logFile - \
             -projectPath "$PROJECT_PATH" \
             -executeMethod Packages.Rider.Editor.RiderScriptEditor.SyncSolution
