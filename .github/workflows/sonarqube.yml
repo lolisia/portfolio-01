@@ -81,7 +81,8 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.verbose=${{ runner.debug == '1' }} \
             /d:sonar.exclusions="**/InputSystem_Actions.cs"
-          dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug
+          # Unity projects reference NUnit/TestRunner, so the scanner would treat them as test projects.
+          dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug -p:SonarQubeTestProject=false
           dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
 
       - name: Return Unity license
