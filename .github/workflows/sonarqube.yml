@@ -28,11 +28,8 @@ jobs:
         with:
           fetch-depth: 0 # SonarQube needs full history for blame / new-code detection
 
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.PROJECT_PATH }}/Library
-          key: Library-sonar-${{ hashFiles(format('{0}/Assets/**', env.PROJECT_PATH), format('{0}/Packages/**', env.PROJECT_PATH), format('{0}/ProjectSettings/**', env.PROJECT_PATH)) }}
-          restore-keys: Library-sonar-
+      # No Library cache here: with a restored Library the editor was repeatedly SIGKILLed
+      # during startup, and this job only needs the .csproj files anyway.
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -60,8 +57,6 @@ jobs:
 
       - name: Generate solution
         run: |
-          df -h /dev/shm
-          free -m
           unity-editor -batchmode -nographics -quit -logFile - \
             -projectPath "$PROJECT_PATH" \
             -executeMethod Packages.Rider.Editor.RiderScriptEditor.SyncSolution
