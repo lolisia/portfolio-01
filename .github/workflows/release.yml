@@ -28,11 +28,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.PROJECT_PATH }}/Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles(format('{0}/Assets/**', env.PROJECT_PATH), format('{0}/Packages/**', env.PROJECT_PATH), format('{0}/ProjectSettings/**', env.PROJECT_PATH)) }}
-          restore-keys: Library-${{ matrix.targetPlatform }}-
+      # No Library cache: with Unity 6000.6 a restored Library gets the editor SIGKILLed
+      # (exit 137) during startup, while clean imports succeed.
 
       - uses: game-ci/unity-builder@v4
         env:
