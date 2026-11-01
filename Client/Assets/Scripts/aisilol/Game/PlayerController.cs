@@ -3,7 +3,6 @@ using UnityEngine;
 
 namespace aisilol.Game
 {
-    [RequireComponent(typeof(CharacterController))]
     public class PlayerController : MonoBehaviour
     {
         [Header("이동 설정")] 
@@ -15,14 +14,11 @@ namespace aisilol.Game
         [SerializeField] 
         public float rotateSpeed = 5;
 
-        private CharacterController _characterController;
         private InputSystem_Actions _playerActions;
         private GameCamera _gameCamera;
-
+        
         private void Awake()
         {
-            _characterController = GetComponent<CharacterController>();
-
             _playerActions = new InputSystem_Actions();
         }
 
@@ -49,11 +45,10 @@ namespace aisilol.Game
         private void UpdateInput(Vector2 input)
         {
             var direction = new Vector3(input.x, 0, input.y);
-
             var targetRotation = Quaternion.LookRotation(direction, Vector3.up);
-            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotateSpeed * 180 * Time.deltaTime);
 
-            _characterController.Move(direction * (moveSpeed * Time.deltaTime));
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, rotateSpeed * 180 * Time.deltaTime);
+            transform.position += direction * (moveSpeed * Time.deltaTime);
         }
 
         private void UpdateZoom(float delta)

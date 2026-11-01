@@ -151,6 +151,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::aisilol.Game.GameCamera
   followSpeed: 3
-  cameraHeight: 10
-  cameraDistance: 10
+  cameraHeight: 5
+  cameraDistance: 3
   zoomStep: 0.03

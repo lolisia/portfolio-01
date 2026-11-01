@@ -26,6 +26,9 @@ namespace aisilol.Game
 
         private GameObject _player;
 
+        public delegate void OnZoomChangedDelegate();
+        public OnZoomChangedDelegate onZoomChanged;
+        
         public void Initialize(GameObject player)
         {
             if (!Utility.IsValid(player))
@@ -47,6 +50,8 @@ namespace aisilol.Game
 
             cameraHeight *= distance / cameraDistance;
             cameraDistance = distance;
+            
+            onZoomChanged.Invoke();
         }
 
         private void SetPosition(Vector3 lookPosition)
