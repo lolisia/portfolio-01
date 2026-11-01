@@ -1,9 +1,7 @@
-﻿using System;
-using aisilol.Common;
+﻿using aisilol.Common;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 namespace aisilol.Game
 {
@@ -98,7 +96,7 @@ namespace aisilol.Game
             floorManager.Initialize(floorPrefab, player, unityCamera);
             
             // Enemy 초기화
-            if (!Utility.TryGetComponent<EnemySpawner>(gameObject, out _enemySpawner, this))
+            if (!Utility.TryGetComponent(gameObject, out _enemySpawner, this))
                 return;
             
             _enemySpawner.Initialize(player, cameraComponent, enemyPrefab);
