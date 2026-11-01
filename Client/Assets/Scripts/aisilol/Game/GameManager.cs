@@ -1,5 +1,6 @@
 ﻿using aisilol.Common;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace aisilol.Game
 {
@@ -18,6 +19,12 @@ namespace aisilol.Game
         [SerializeField]
         public GameObject floorPrefab;
 
+        public void OnClick_Restart()
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(activeScene.name);
+        }
+        
         private bool CheckCondition()
         {
             if (!Utility.IsValid(playerPrefab, this))

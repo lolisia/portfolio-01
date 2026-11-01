@@ -1,6 +1,5 @@
 ﻿using aisilol.Common;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace aisilol.Game
 {
@@ -25,9 +24,18 @@ namespace aisilol.Game
             _characterController = GetComponent<CharacterController>();
 
             _playerActions = new InputSystem_Actions();
-            _playerActions.Enable();
-            
-            Utility.CheckValid(_playerActions, this);
+        }
+
+        private void OnEnable()
+        {
+            if (Utility.IsValid(_playerActions, this))
+                _playerActions.Enable();
+        }
+
+        private void OnDestroy()
+        {
+            if (Utility.IsValid(_playerActions, this))
+                _playerActions.Disable();
         }
 
         public void Initialize(GameCamera gameCamera)

@@ -5,21 +5,21 @@ namespace aisilol.Game
 {
     public class GameCamera : MonoBehaviour
     {
-        [SerializeField]
         [Header("카메라 설정")]
         [SetInspectorName("따라가기 속도")]
+        [SerializeField]
         public float followSpeed = 3;
 
-        [SerializeField] 
         [SetInspectorName("높이")]
+        [SerializeField] 
         public float cameraHeight = 10;
 
-        [SerializeField] 
         [SetInspectorName("거리")]
+        [SerializeField] 
         public float cameraDistance = 10;
 
-        [SerializeField]
         [SetInspectorName("줌 비율 (휠 한 칸)")]
+        [SerializeField]
         public float zoomStep = 0.1f;
 
         private const float MinDistance = 2;    // 줌 인 시 카메라 거리의 최솟값
