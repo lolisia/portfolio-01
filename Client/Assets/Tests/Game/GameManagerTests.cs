@@ -45,7 +45,7 @@ namespace aisilol.Tests.Game
         [UnityTearDown]
         public IEnumerator TearDown() => _helper.UnloadScene();
 
-        private static T FindActive<T>() where T : Object => Object.FindObjectsByType<T>(FindObjectsSortMode.None).SingleOrDefault();
+        private static T FindActive<T>() where T : Object => Object.FindObjectsByType<T>().SingleOrDefault();
 
         [UnityTest]
         public IEnumerator Start_CreatesGameAndShowsStatus()
