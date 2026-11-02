@@ -18,8 +18,12 @@ namespace aisilol.Tests
             SceneManager.SetActiveScene(_scene);
         }
 
+        // 씬의 오브젝트가 모두 사라진 뒤에 에셋을 파괴해야 언로드 도중 렌더링에서 파괴된 Material을 참조하지 않음
         public IEnumerator UnloadScene()
         {
+            if (_scene.IsValid() && _scene.isLoaded)
+                yield return SceneManager.UnloadSceneAsync(_scene);
+
             foreach (var asset in _assets)
             {
                 if (asset)
@@ -27,9 +31,6 @@ namespace aisilol.Tests
             }
 
             _assets.Clear();
-
-            if (_scene.IsValid() && _scene.isLoaded)
-                yield return SceneManager.UnloadSceneAsync(_scene);
         }
 
         public static IEnumerator WaitFrames(int count)
