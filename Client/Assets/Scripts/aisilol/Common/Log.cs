@@ -40,6 +40,6 @@ namespace aisilol.Common
             UnityEngine.Object context = null, 
             [CallerFilePath] string filePath = "",
             [CallerLineNumber] int lineNumber = 0,
-            [CallerMemberName] string memberName = "") => WriteLog(Level.Info, message, context, filePath, lineNumber, memberName);
+            [CallerMemberName] string memberName = "") => WriteLog(Level.Error, message, context, filePath, lineNumber, memberName);
     }
 }

@@ -38,7 +38,8 @@ namespace aisilol.Game
 
         private float _spawnEnemyDistance;
 
-        public int EnemyCount => _enemyPositions.IsCreated ? _enemyPositions.Length : 0;
+        // 이동 Job이 실행 중일 때도 읽을 수 있도록 NativeList 길이 대신 별도로 관리
+        public int EnemyCount { get; private set; }
 
         public void Initialize(GameObject player, GameCamera gameCamera, GameObject enemyPrefab)
         {
@@ -153,6 +154,7 @@ namespace aisilol.Game
         private void OnDestroy()
         {
             _moveJobHandle.Complete();
+            EnemyCount = 0;
 
             if (_enemyPositions.IsCreated)
                 _enemyPositions.Dispose();
@@ -179,6 +181,8 @@ namespace aisilol.Game
                 _enemySpeeds.Add(UnityEngine.Random.Range(_enemySpeedRange.x, _enemySpeedRange.y));
                 _enemyMatrices.Add(default);    // MoveJob에서 매 프레임 채움
             }
+
+            EnemyCount = _enemyPositions.Length;
         }
 
         private void CalcSpawnEnemyDistance()
@@ -226,7 +230,7 @@ namespace aisilol.Game
         }
 
         [BurstCompile]
-        private struct MoveJob : IJobParallelFor
+        internal struct MoveJob : IJobParallelFor
         {
             public NativeArray<float3> positions;
             [ReadOnly] public NativeArray<float> speeds;

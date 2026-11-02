@@ -51,7 +51,7 @@ namespace aisilol.Game
             cameraHeight *= distance / cameraDistance;
             cameraDistance = distance;
             
-            onZoomChanged.Invoke();
+            onZoomChanged?.Invoke();
         }
 
         private void SetPosition(Vector3 lookPosition)

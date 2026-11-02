@@ -104,6 +104,10 @@ namespace aisilol.Game
 
         private void Update()
         {
+            // Start에서 초기화에 실패했거나 UI가 연결되지 않은 경우
+            if (!_enemySpawner || !uiText)
+                return;
+
             var text = $"Enemy Count: {_enemySpawner.EnemyCount:N0}\nFPS : {CalcFPS():F1}";
             uiText.SetText(text);           
         }

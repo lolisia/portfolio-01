@@ -11,6 +11,7 @@ env:
   PROJECT_PATH: Client
   SONAR_ORGANIZATION: lolisia
   SONAR_PROJECT_KEY: lolisia_portfolio-01
+  TEST_ARTIFACTS_DIR: test-artifacts # Relative to the workspace; `github.workspace` is the host path inside a container job
 
 jobs:
   analyze:
@@ -67,7 +68,7 @@ jobs:
           dotnet tool install --global dotnet-sonarscanner
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Build and analyze
+      - name: Begin analysis and build
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
@@ -77,10 +78,35 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.verbose=${{ runner.debug == '1' }} \
-            /d:sonar.exclusions="**/InputSystem_Actions.cs"
+            /d:sonar.exclusions="**/InputSystem_Actions.cs" \
+            /d:sonar.coverage.exclusions="**/Assets/Tests/**,**/Editor/**" \
+            /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/$TEST_ARTIFACTS_DIR/coverage/**/TestCoverageResults_*.xml"
           # Unity projects reference NUnit/TestRunner, so the scanner would treat them as test projects.
           dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug -p:SonarQubeTestProject=false
-          dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+      # PlayMode tests cover the MonoBehaviour lifecycle; the OpenCover report is picked up by `sonarscanner end`.
+      - name: Run tests with coverage
+        run: |
+          unity-editor -batchmode -nographics -logFile - \
+            -projectPath "$PROJECT_PATH" \
+            -runTests -testPlatform PlayMode \
+            -testResults "$GITHUB_WORKSPACE/$TEST_ARTIFACTS_DIR/test-results.xml" \
+            -debugCodeOptimization -enableCodeCoverage \
+            -coverageResultsPath "$GITHUB_WORKSPACE/$TEST_ARTIFACTS_DIR/coverage" \
+            -coverageOptions "generateAdditionalMetrics;assemblyFilters:+aisilol;pathFilters:-**/InputSystem_Actions.cs"
+
+      - name: End analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ env.TEST_ARTIFACTS_DIR }}
+          if-no-files-found: ignore
 
       - name: Return Unity license
         if: always()
