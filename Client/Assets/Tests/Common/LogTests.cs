@@ -1,5 +1,4 @@
 using System;
-using System.Text.RegularExpressions;
 using aisilol.Common;
 using NUnit.Framework;
 using UnityEngine;
@@ -14,7 +13,7 @@ namespace aisilol.Tests.Common
         [TestCase(Log.Level.Error, LogType.Error)]
         public void WriteLog_WritesCallerInfoWithMatchingLogType(Log.Level level, LogType logType)
         {
-            LogAssert.Expect(logType, new Regex(@"^\[LogTests\.cs:\d+\] LogTests::WriteLog_WritesCallerInfoWithMatchingLogType\(\) ""hello""$"));
+            LogAssert.Expect(logType, TestHelper.Pattern(@"^\[LogTests\.cs:\d+\] LogTests::WriteLog_WritesCallerInfoWithMatchingLogType\(\) ""hello""$"));
 
             Log.WriteLog(level, "hello");
         }
@@ -28,7 +27,7 @@ namespace aisilol.Tests.Common
         [Test]
         public void Error_WritesErrorLog()
         {
-            LogAssert.Expect(LogType.Error, new Regex(@"LogTests::Error_WritesErrorLog\(\) ""failed""$"));
+            LogAssert.Expect(LogType.Error, TestHelper.Pattern(@"LogTests::Error_WritesErrorLog\(\) ""failed""$"));
 
             Log.Error("failed");
         }

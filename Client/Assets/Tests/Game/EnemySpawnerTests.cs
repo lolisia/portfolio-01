@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text.RegularExpressions;
 using aisilol.Game;
 using NUnit.Framework;
 using Unity.Collections;
@@ -142,7 +141,7 @@ namespace aisilol.Tests.Game
             var player = _player;
             var gameCamera = _gameCamera;
             var enemyPrefab = _enemyPrefab;
-            var nullError = new Regex("인자가 null 입니다");
+            var nullError = TestHelper.Pattern("인자가 null 입니다");
 
             switch (setup)
             {
@@ -163,12 +162,12 @@ namespace aisilol.Tests.Game
 
                 case InvalidSetup.CameraWithoutCamera:
                     gameCamera = new GameObject("NoCamera").AddComponent<GameCamera>();
-                    LogAssert.Expect(LogType.Error, new Regex("Camera Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("Camera Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.PrefabWithoutMeshFilter:
                     enemyPrefab = _helper.CreateTemplate("Empty");
-                    LogAssert.Expect(LogType.Error, new Regex("MeshFilter Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("MeshFilter Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.PrefabWithoutMesh:
@@ -178,7 +177,7 @@ namespace aisilol.Tests.Game
 
                 case InvalidSetup.PrefabWithoutMeshRenderer:
                     Object.DestroyImmediate(enemyPrefab.GetComponent<MeshRenderer>());
-                    LogAssert.Expect(LogType.Error, new Regex("MeshRenderer Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("MeshRenderer Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.PrefabWithoutMaterial:
@@ -188,17 +187,17 @@ namespace aisilol.Tests.Game
 
                 case InvalidSetup.PrefabWithoutEnemy:
                     Object.DestroyImmediate(enemyPrefab.GetComponent<Enemy>());
-                    LogAssert.Expect(LogType.Error, new Regex("Enemy Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("Enemy Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.InstancingDisabled:
                     enemyPrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: false);
-                    LogAssert.Expect(LogType.Error, new Regex("GPU Instancing이 꺼져 있습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("GPU Instancing이 꺼져 있습니다"));
                     break;
 
                 case InvalidSetup.ZeroHeight:
                     enemyPrefab.transform.localScale = new Vector3(1, 0, 1);
-                    LogAssert.Expect(LogType.Error, new Regex("Enemy의 높이가 0 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("Enemy의 높이가 0 입니다"));
                     break;
             }
 

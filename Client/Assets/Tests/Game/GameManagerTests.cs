@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Linq;
-using System.Text.RegularExpressions;
 using aisilol.Game;
 using NUnit.Framework;
 using TMPro;
@@ -81,7 +80,7 @@ namespace aisilol.Tests.Game
             while (Time.realtimeSinceStartupAsDouble < endTime)
                 yield return null;
 
-            var match = Regex.Match(_gameManager.uiText.text, @"FPS : ([\d.]+)");
+            var match = TestHelper.Pattern(@"FPS : ([\d.]+)").Match(_gameManager.uiText.text);
             Assert.IsTrue(match.Success, _gameManager.uiText.text);
             Assert.Greater(float.Parse(match.Groups[1].Value), 0);
         }
@@ -114,12 +113,12 @@ namespace aisilol.Tests.Game
             {
                 case InvalidSetup.NullPlayerPrefab:
                     _gameManager.playerPrefab = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
 
                 case InvalidSetup.NullGameCameraPrefab:
                     _gameManager.gameCameraPrefab = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
 
                 // MeshFilter가 없으면 로그 없이 중단
@@ -129,24 +128,24 @@ namespace aisilol.Tests.Game
 
                 case InvalidSetup.ZeroHeightPlayer:
                     _gameManager.playerPrefab.transform.localScale = new Vector3(1, 0, 1);
-                    LogAssert.Expect(LogType.Error, new Regex("Player의 높이가 0 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("Player의 높이가 0 입니다"));
                     break;
 
                 case InvalidSetup.CameraWithoutGameCamera:
                     Object.DestroyImmediate(_gameManager.gameCameraPrefab.GetComponent<GameCamera>());
-                    LogAssert.Expect(LogType.Error, new Regex("GameCamera Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("GameCamera Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.PlayerWithoutPlayerController:
                     Object.DestroyImmediate(_gameManager.playerPrefab.GetComponent<PlayerController>());
-                    LogAssert.Expect(LogType.Error, new Regex("PlayerController Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("PlayerController Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.CameraWithoutCamera:
                     Object.DestroyImmediate(_gameManager.gameCameraPrefab.GetComponent<GameCamera>());
                     Object.DestroyImmediate(_gameManager.gameCameraPrefab.GetComponent<Camera>());
                     _gameManager.gameCameraPrefab.AddComponent<GameCamera>();
-                    LogAssert.Expect(LogType.Error, new Regex("Camera Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("Camera Component가 존재하지 않습니다"));
                     break;
             }
 

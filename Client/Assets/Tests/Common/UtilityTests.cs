@@ -9,7 +9,7 @@ namespace aisilol.Tests.Common
 {
     public class UtilityTests
     {
-        private static readonly Regex NullError = new("인자가 null 입니다");
+        private static readonly Regex NullError = TestHelper.Pattern("인자가 null 입니다");
 
         private readonly TestHelper _helper = new();
 
@@ -90,7 +90,7 @@ namespace aisilol.Tests.Common
         public void TryGetComponent_MissingComponent_ReturnsFalse()
         {
             var gameObject = new GameObject("Owner");
-            LogAssert.Expect(LogType.Error, new Regex("Owner에 BoxCollider Component가 존재하지 않습니다"));
+            LogAssert.Expect(LogType.Error, TestHelper.Pattern("Owner에 BoxCollider Component가 존재하지 않습니다"));
 
             Assert.IsFalse(Utility.TryGetComponent<BoxCollider>(gameObject, out var component));
             Assert.IsNull(component);

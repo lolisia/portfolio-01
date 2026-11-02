@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -32,6 +33,9 @@ namespace aisilol.Tests
 
             _assets.Clear();
         }
+
+        // 정규식은 항상 실행 시간 제한을 두고 생성 (Sonar S6444)
+        public static Regex Pattern(string pattern) => new(pattern, RegexOptions.None, System.TimeSpan.FromSeconds(1));
 
         public static IEnumerator WaitFrames(int count)
         {

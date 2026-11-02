@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Text.RegularExpressions;
 using aisilol.Game;
 using NUnit.Framework;
 using UnityEngine;
@@ -89,7 +88,7 @@ namespace aisilol.Tests.Game
         [Test]
         public void Initialize_NullCamera_LogsError()
         {
-            LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+            LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
 
             _player.Initialize(null);
         }

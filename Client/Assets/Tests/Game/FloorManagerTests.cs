@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Linq;
-using System.Text.RegularExpressions;
 using aisilol.Game;
 using NUnit.Framework;
 using UnityEngine;
@@ -180,32 +179,32 @@ namespace aisilol.Tests.Game
             {
                 case InvalidSetup.NullPrefab:
                     floorPrefab = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
 
                 case InvalidSetup.PrefabWithoutMeshFilter:
                     floorPrefab = _helper.CreateTemplate("Empty");
-                    LogAssert.Expect(LogType.Error, new Regex("MeshFilter Component가 존재하지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("MeshFilter Component가 존재하지 않습니다"));
                     break;
 
                 case InvalidSetup.PrefabWithoutMesh:
                     floorPrefab.GetComponent<MeshFilter>().sharedMesh = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
 
                 case InvalidSetup.ZeroSizePrefab:
                     floorPrefab.transform.localScale = new Vector3(0, 1, 1);
-                    LogAssert.Expect(LogType.Error, new Regex("크기가 올바르지 않습니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("크기가 올바르지 않습니다"));
                     break;
 
                 case InvalidSetup.NullPlayer:
                     player = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
 
                 case InvalidSetup.NullCamera:
                     camera = null;
-                    LogAssert.Expect(LogType.Error, new Regex("인자가 null 입니다"));
+                    LogAssert.Expect(LogType.Error, TestHelper.Pattern("인자가 null 입니다"));
                     break;
             }
 
