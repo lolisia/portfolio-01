@@ -109,6 +109,7 @@ namespace aisilol.Tests.Game
             _player.projectileSpeed = 12;
             _player.range = 4;
             _player.pierce = 2;
+            _player.magnetRange = 1.5f;
 
             var stats = _player.CreateStats();
 
@@ -120,6 +121,7 @@ namespace aisilol.Tests.Game
             Assert.AreEqual(12, stats.Get(StatType.ProjectileSpeed));
             Assert.AreEqual(4, stats.Get(StatType.Range));
             Assert.AreEqual(2, stats.Get(StatType.Pierce));
+            Assert.AreEqual(1.5f, stats.Get(StatType.Magnet));
         }
 
         [Test]

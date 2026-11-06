@@ -19,9 +19,11 @@ namespace aisilol.Tests.Game
         {
             _helper.CreateScene();
 
-            // 경험치 / 레벨업을 처치 수로만 확인하도록 기본은 발사하지 않음
+            // 경험치 / 레벨업을 직접 처치한 수로만 확인하도록 기본은 발사하지 않고, 떨어진 경험치 Object는 모두 끌어옴
             var playerPrefab = _helper.CreateTemplate(PrimitiveType.Capsule, "Player");
-            playerPrefab.AddComponent<PlayerController>().range = 0;
+            var playerController = playerPrefab.AddComponent<PlayerController>();
+            playerController.range = 0;
+            playerController.magnetRange = 10000;
 
             var gameCameraPrefab = _helper.CreateTemplate("GameCamera");
             gameCameraPrefab.AddComponent<Camera>();
@@ -42,12 +44,19 @@ namespace aisilol.Tests.Game
             _gameManager.floorPrefab = _helper.CreateTemplate(PrimitiveType.Plane, "Floor");
             _gameManager.projectilePrefab = _helper.CreateTemplate(PrimitiveType.Sphere, "Projectile");
             _gameManager.projectilePrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: true);
+            _gameManager.experiencePrefab = _helper.CreateTemplate(PrimitiveType.Sphere, "ExperienceOrb");
+            _gameManager.experiencePrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: true);
+            _gameManager.potionPrefab = _helper.CreateTemplate(PrimitiveType.Capsule, "Potion");
+            _gameManager.potionPrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: true);
             _gameManager.upgrades = new[]
             {
                 _helper.CreateUpgrade(StatType.MaxHealth, ModifierType.Add, 20),
                 _helper.CreateUpgrade(StatType.Damage, ModifierType.Percent, 0.5f),
             };
-            _gameManager.spawnPerSecond = AnimationCurve.Constant(0, 1, 100000);
+            _gameManager.spawnPerSecondBase = 100000;
+            _gameManager.spawnPerSecondGrowth = 1;
+            _gameManager.minSpawnFps = 0;
+            _gameManager.potionDropChance = AnimationCurve.Constant(0, 1, 0);
             _gameManager.uiText = new GameObject("UIText").AddComponent<TextMeshProUGUI>();
         }
 
@@ -73,6 +82,7 @@ namespace aisilol.Tests.Game
 
             Assert.IsNotNull(_gameManager.GetComponent<FloorManager>());
             Assert.IsNotNull(_gameManager.GetComponent<ProjectileSystem>());
+            Assert.IsNotNull(_gameManager.GetComponent<PickupSystem>());
             Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
             Assert.AreEqual(100, _gameManager.Health);
             Assert.Greater(_gameManager.transform.childCount, 0);
@@ -109,16 +119,19 @@ namespace aisilol.Tests.Game
 
         private EnemyManager Enemies => _gameManager.GetComponent<EnemyManager>();
 
-        // Enemy를 count개 처치. 처치는 LateUpdate에서 반영되고, 경험치는 다음 프레임 GameManager.Update에서 반영
+        private PickupSystem Pickups => _gameManager.GetComponent<PickupSystem>();
+
+        // Enemy를 count개 처치. 경험치는 떨어진 경험치 Object가 플레이어에게 끌려와 획득된 뒤 반영
         private IEnumerator KillEnemies(int count)
         {
             while (Enemies.EnemyCount < count)
                 yield return null;
 
+            var kills = Enemies.KillCount;
             for (var index = 0; index < count; index++)
                 Enemies.QueueDamage(index, 1000);
 
-            yield return TestHelper.WaitFrames(2);
+            yield return TestHelper.WaitUntil(() => Enemies.KillCount >= kills + count);
         }
 
         private void AttachCanvas()
@@ -132,6 +145,10 @@ namespace aisilol.Tests.Game
         {
             _gameManager.gameObject.SetActive(true);
             yield return KillEnemies(10);
+
+            // 처치만으로는 경험치가 오르지 않고, 경험치 Object를 획득해야 오름
+            Assert.AreEqual(1, _gameManager.Experience.Level);
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
 
             Assert.AreEqual(GameManager.GameState.LevelUp, _gameManager.State);
             Assert.AreEqual(0, Time.timeScale);
@@ -154,14 +171,22 @@ namespace aisilol.Tests.Game
         {
             _gameManager.gameObject.SetActive(true);
 
-            // 10 + 28 = 38 경험치로 2레벨 상승
+            // 10 + 28 = 38 경험치로 2레벨 상승. 레벨업 선택 중에는 일시 정지되어 남은 Object는 선택 후 획득
             yield return KillEnemies(40);
+
+            var selections = 0;
+            yield return TestHelper.WaitUntil(() =>
+            {
+                if (_gameManager.State == GameManager.GameState.LevelUp)
+                {
+                    _gameManager.SelectUpgrade(0);
+                    ++selections;
+                }
+
+                return selections == 2;
+            });
+
             Assert.AreEqual(3, _gameManager.Experience.Level);
-
-            _gameManager.SelectUpgrade(0);
-            Assert.AreEqual(GameManager.GameState.LevelUp, _gameManager.State);
-
-            _gameManager.SelectUpgrade(0);
             Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
         }
 
@@ -171,9 +196,55 @@ namespace aisilol.Tests.Game
             _gameManager.upgrades = new UpgradeDefinition[0];
             _gameManager.gameObject.SetActive(true);
             yield return KillEnemies(10);
+            yield return TestHelper.WaitUntil(() => _gameManager.Experience.Level == 2);
 
             Assert.AreEqual(2, _gameManager.Experience.Level);
             Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
+        }
+
+        [UnityTest]
+        public IEnumerator Potion_HealsUpToMaxHealth()
+        {
+            _gameManager.potionDropChance = AnimationCurve.Constant(0, 1, 1);
+            _gameManager.gameObject.SetActive(true);
+            yield return KillEnemies(3);
+
+            yield return TestHelper.WaitUntil(() => Pickups.PotionCount == 0);
+
+            // 체력이 가득 찬 상태에서 회복해도 최대 체력을 넘지 않음
+            Assert.AreEqual(0, Pickups.PotionCount);
+            Assert.AreEqual(100, _gameManager.Health);
+        }
+
+        [UnityTest]
+        public IEnumerator PotionDropChance_RisesAsHealthDrops()
+        {
+            // HP 비율 1 → 확률 0, HP 비율 0 → 확률 1
+            _gameManager.potionDropChance = AnimationCurve.Linear(0, 1, 1, 0);
+            var enemy = _gameManager.enemyPrefab.GetComponent<Enemy>();
+            enemy.moveSpeed = new Vector2(1000, 1000);
+            enemy.contactDamage = 40;
+
+            _gameManager.gameObject.SetActive(true);
+            yield return null;
+            Assert.AreEqual(0, Pickups.PotionDropChance, 1e-5f);
+
+            // 접촉 피해 40 → HP 비율 0.6 → 확률 0.4
+            yield return TestHelper.WaitUntil(() => _gameManager.Health < 100);
+            yield return null;
+            Assert.AreEqual(1 - _gameManager.Health / 100, Pickups.PotionDropChance, 1e-5f);
+        }
+
+        [Test]
+        public void CalcSpawnPerSecond_GrowsExponentiallyByLevel()
+        {
+            _gameManager.spawnPerSecondBase = 10;
+            _gameManager.spawnPerSecondGrowth = 2;
+
+            Assert.AreEqual(10, _gameManager.CalcSpawnPerSecond(1));
+            Assert.AreEqual(20, _gameManager.CalcSpawnPerSecond(2));
+            Assert.AreEqual(80, _gameManager.CalcSpawnPerSecond(4));
+            Assert.AreEqual(10, _gameManager.CalcSpawnPerSecond(0));
         }
 
         [UnityTest]
@@ -194,6 +265,7 @@ namespace aisilol.Tests.Game
             AttachCanvas();
             _gameManager.gameObject.SetActive(true);
             yield return KillEnemies(10);
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
 
             var hud = _gameManager.Hud;
             Assert.IsNotNull(hud);
@@ -288,6 +360,7 @@ namespace aisilol.Tests.Game
 
             Assert.IsNull(_gameManager.GetComponent<FloorManager>());
             Assert.IsNull(_gameManager.GetComponent<ProjectileSystem>());
+            Assert.IsNull(_gameManager.GetComponent<PickupSystem>());
             Assert.AreEqual(0, _gameManager.GetComponent<EnemyManager>().EnemyCount);
             StringAssert.DoesNotContain("Enemy Count", _gameManager.uiText.text ?? "");
         }

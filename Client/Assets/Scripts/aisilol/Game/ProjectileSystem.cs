@@ -22,6 +22,7 @@ namespace aisilol.Game
         private EnemyManager _enemies;
         private PlayerStats _stats;
         private InstancedMesh _mesh;
+        private InstanceRenderer _renderer;
         private float _hitRadius;
 
         private NativeList<float3> _positions;
@@ -58,6 +59,7 @@ namespace aisilol.Game
             _enemies = enemies;
             _stats = stats;
             _mesh = mesh;
+            _renderer = new InstanceRenderer(mesh);
             _hitRadius = Mathf.Max(mesh.Size.x, mesh.Size.z) * 0.5f + enemies.Radius;
 
             _positions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
@@ -110,7 +112,7 @@ namespace aisilol.Game
             Fire(Time.deltaTime);
 
             ProjectileCount = _positions.Length;
-            _mesh.Render(_matrices.AsArray());
+            _renderer.Render(_matrices.AsArray(), _enemies ? _enemies.Camera : null);
         }
 
         private void OnDestroy()
@@ -138,6 +140,9 @@ namespace aisilol.Game
 
             if (_nearest.IsCreated)
                 _nearest.Dispose();
+
+            _renderer?.Dispose();
+            _renderer = null;
         }
 
         private void RemoveExpired()

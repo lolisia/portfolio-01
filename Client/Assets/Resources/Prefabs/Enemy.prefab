@@ -104,3 +104,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::aisilol.Game.Enemy
   moveSpeed: {x: 0.1, y: 0.8}
+  maxHealth: 2
+  contactDamage: 5
+  experience: 2

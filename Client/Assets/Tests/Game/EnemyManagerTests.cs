@@ -30,7 +30,9 @@ namespace aisilol.Tests.Game
             _enemyPrefab.AddComponent<Enemy>();
             _enemyPrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: true);
 
+            // batchmode / CI 성능과 관계없이 생성되도록 FPS 제한 해제
             _manager = new GameObject("EnemyManager").AddComponent<EnemyManager>();
+            _manager.MinSpawnFps = 0;
         }
 
         [UnityTearDown]
@@ -56,6 +58,39 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator Update_FpsBelowMinimum_StopsSpawning()
+        {
+            _manager.SpawnPerSecond = 100000;
+            _manager.MinSpawnFps = float.MaxValue;
+            _manager.Initialize(_player, _gameCamera, _enemyPrefab);
+            yield return TestHelper.WaitFrames(3);
+
+            Assert.IsTrue(_manager.IsSpawnThrottled);
+            Assert.AreEqual(0, _manager.EnemyCount);
+
+            // 기준을 낮추면 밀린 생성 수 없이 다시 생성
+            _manager.MinSpawnFps = 0;
+            yield return TestHelper.WaitFrames(2);
+
+            Assert.IsFalse(_manager.IsSpawnThrottled);
+            Assert.Greater(_manager.EnemyCount, 0);
+            Assert.Greater(_manager.AverageFps, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator Update_HighSpawnRate_LimitedPerFrame()
+        {
+            _manager.SpawnPerSecond = 1e9f;
+            _manager.MaxSpawnPerFrame = 7;
+            _manager.Initialize(_player, _gameCamera, _enemyPrefab);
+
+            // 첫 프레임은 Spawn 거리 계산만 수행
+            yield return TestHelper.WaitFrames(4);
+
+            Assert.AreEqual(21, _manager.EnemyCount);
+        }
+
+        [UnityTest]
         public IEnumerator Zoom_KeepsSpawningWithRecalculatedDistance()
         {
             _manager.SpawnPerSecond = 100000;
@@ -70,14 +105,32 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
-        public IEnumerator Update_HorizonVisible_DoesNotSpawn()
+        public IEnumerator Update_HorizonVisible_KeepsSpawningAtMaxDistance()
         {
+            // 지평선이 보이거나 크게 줌 아웃해서 생성 거리가 최대 거리(200m)로 제한되어도 생성은 계속됨
             _gameCamera.transform.rotation = Quaternion.LookRotation(Vector3.forward);
             _manager.SpawnPerSecond = 100000;
             _manager.Initialize(_player, _gameCamera, _enemyPrefab);
             yield return TestHelper.WaitFrames(3);
 
-            Assert.AreEqual(0, _manager.EnemyCount);
+            Assert.Greater(_manager.EnemyCount, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator Update_InfiniteSpawnRate_SpawnsUpToFrameLimit()
+        {
+            // 높은 레벨에서 생성 수가 int 범위를 넘거나 무한대가 되어도 프레임당 상한만큼 계속 생성
+            _manager.SpawnPerSecond = float.PositiveInfinity;
+            _manager.MaxSpawnPerFrame = 5;
+            _manager.Initialize(_player, _gameCamera, _enemyPrefab);
+            yield return TestHelper.WaitFrames(3);
+
+            Assert.AreEqual(10, _manager.EnemyCount);
+
+            _manager.SpawnPerSecond = 1e12f;
+            yield return null;
+
+            Assert.AreEqual(15, _manager.EnemyCount);
         }
 
         [UnityTest]

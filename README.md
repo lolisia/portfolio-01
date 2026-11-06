@@ -21,9 +21,12 @@
 - Enemy는 GameObject 없이 `NativeList`에 위치/속도/체력만 저장
 - 매 프레임 Burst Job으로 공간 해시 격자([SpatialGrid.cs](Client/Assets/Scripts/aisilol/Game/SpatialGrid.cs))를 만들고, 이동 / 겹침 밀어내기 / 플레이어 접촉 판정이 격자를 공유
 - 이동은 위치 이중 버퍼. 이웃 위치를 읽는 동안 덮어쓰지 않음
-- Update에서 Job 예약, LateUpdate에서 완료 후 데미지 적용, 사망한 Enemy는 swap-back으로 제거
+- Update에서 Job 예약, LateUpdate에서 완료 후 데미지 적용 / 사망 제거(swap-back)를 Burst `IJob`으로 처리
 - 렌더링은 `Graphics.RenderMeshInstanced`로 1023개씩 묶어서 처리 ([InstancedMesh.cs](Client/Assets/Scripts/aisilol/Game/InstancedMesh.cs))
-- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 플레이어 레벨, 체력은 경과 시간 커브로 증가
+- 카메라 시야 밖은 Burst Job으로 제외한 뒤 렌더링. Enemy / 투사체 / 드롭 공용 ([InstanceRenderer.cs](Client/Assets/Scripts/aisilol/Game/InstanceRenderer.cs))
+- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 레벨에 따라 지수 증가(기본값 * 증가율^(레벨 - 1)), 체력은 경과 시간 커브로 증가
+- Enemy 수는 고정 상한 없음. 평균 FPS(0.5초 지수 이동 평균)가 기준(기본 60) 아래면 생성 중지
+- 한 프레임 생성 수는 상한(기본 100)까지. 넘는 수는 이월하지 않음
 
 **투사체** ([ProjectileSystem.cs](Client/Assets/Scripts/aisilol/Game/ProjectileSystem.cs))
 - 사거리 안의 가장 가까운 Enemy로 자동 발사. 투사체도 GameObject 없이 데이터로 처리
@@ -31,8 +34,16 @@
 - 관통 수만큼 구간 위의 Enemy를 가까운 순서로 맞힘. 밀집할수록 한 발에 여러 마리 처치
 - 맞힌 Enemy는 `NativeQueue` 데미지 큐에 기록하고, EnemyManager가 LateUpdate에서 일괄 적용
 
+**드롭** ([PickupSystem.cs](Client/Assets/Scripts/aisilol/Game/PickupSystem.cs))
+- Enemy 사망 위치에 경험치 Object, 확률로 HP 포션 드롭. 경험치는 Object를 획득해야 증가
+- 포션 드롭 확률은 플레이어 HP 비율 커브. HP가 낮을수록 높음
+- 자석 범위 안에 들어오면 플레이어에게 끌려와 획득. 이동 / 획득 판정은 Burst Job
+- 가까이 모인 같은 단계의 경험치 Object 10개를 다음 단계 1개로 병합(1 → 10 → 100 ...). 셀 + 단계로 정렬 후 묶음 처리
+- 병합 범위는 0단계 0.5m, 단계마다 3배. 단계별로 색과 크기가 다름
+- 드롭 생성 / 획득 / 제거는 Burst `IJob`
+
 **성장** ([PlayerStats.cs](Client/Assets/Scripts/aisilol/Game/PlayerStats.cs), [UpgradeDefinition.cs](Client/Assets/Scripts/aisilol/Game/UpgradeDefinition.cs))
-- 처치 수만큼 경험치, 레벨업 시 일시 정지 후 강화 3택 1
+- 레벨업 시 일시 정지 후 강화 3택 1
 - 강화는 ScriptableObject 에셋([Data/Upgrades](Client/Assets/Data/Upgrades)). 능력치 / 적용 방식(Add, Percent) / 값 / 최대 레벨만 입력
 - 능력치 = (기본값 + Add 합) * (1 + Percent 합)
 
@@ -54,12 +65,13 @@ flowchart LR
     P --> Q[데미지 큐]
     Q --> D[LateUpdate: 데미지 적용 / 제거]
     M --> D
+    D --> K[드롭 생성 / 병합]
     D --> R[RenderMeshInstanced]
 ```
 
 ## 테스트 / CI
 
-- PlayMode 테스트 121개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
+- PlayMode 테스트 148개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
 - push / PR 시 테스트 + 커버리지 + SonarQube Cloud 분석 ([sonarqube.yml](.github/workflows/sonarqube.yml))
 - `v*` 태그 push 시 GameCI로 Windows 빌드 후 Release 업로드 ([release.yml](.github/workflows/release.yml))
 

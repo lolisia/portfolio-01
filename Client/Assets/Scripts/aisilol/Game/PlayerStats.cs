@@ -13,6 +13,7 @@ namespace aisilol.Game
         ProjectileSpeed,
         Range,
         Pierce,     // 투사체 1발이 맞힐 수 있는 Enemy 수. 에셋에 enum 값이 저장되므로 항상 끝에 추가
+        Magnet,     // 경험치 Object / HP 포션을 끌어오는 반경(m)
     }
 
     public enum ModifierType
