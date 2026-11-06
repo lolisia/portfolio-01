@@ -38,6 +38,7 @@
 - Enemy 사망 위치에 경험치 Object, 확률로 HP 포션 드롭. 경험치는 Object를 획득해야 증가
 - 포션 드롭 확률은 플레이어 HP 비율 커브. HP가 낮을수록 높음
 - 자석 범위 안에 들어오면 플레이어에게 끌려와 획득. 이동 / 획득 판정은 Burst Job
+- 레벨업하면 맵에 남은 경험치 Object를 모두 끌어옴
 - 가까이 모인 같은 단계의 경험치 Object 10개를 다음 단계 1개로 병합(1 → 10 → 100 ...). 셀 + 단계로 정렬 후 묶음 처리
 - 병합 범위는 0단계 0.5m, 단계마다 3배. 단계별로 색과 크기가 다름
 - 드롭 생성 / 획득 / 제거는 Burst `IJob`
@@ -71,7 +72,7 @@ flowchart LR
 
 ## 테스트 / CI
 
-- PlayMode 테스트 151개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
+- PlayMode 테스트 154개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
 - push / PR 시 테스트 + 커버리지 + SonarQube Cloud 분석 ([sonarqube.yml](.github/workflows/sonarqube.yml))
 - `v*` 태그 push 시 GameCI로 Windows 빌드 후 Release 업로드 ([release.yml](.github/workflows/release.yml))
 
