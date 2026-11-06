@@ -48,6 +48,20 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator GameScene_SpawnsJustOutsideScreen()
+        {
+            yield return SceneManager.LoadSceneAsync(SceneName);
+
+            // 첫 프레임에는 카메라가 아직 플레이어를 보지 않아 최대 거리(200m)가 계산됨. 이후 프레임에 화면 모서리 거리로 갱신되어야 함
+            var enemies = Object.FindAnyObjectByType<GameManager>().GetComponent<EnemyManager>();
+            yield return TestHelper.WaitUntil(() => enemies.EnemyCount > 0);
+            yield return TestHelper.WaitFrames(3);
+
+            Assert.Greater(enemies.SpawnDistance, 0);
+            Assert.Less(enemies.SpawnDistance, 50);
+        }
+
+        [UnityTest]
         public IEnumerator OnClick_Restart_ReloadsScene()
         {
             yield return SceneManager.LoadSceneAsync(SceneName);

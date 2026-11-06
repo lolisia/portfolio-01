@@ -112,7 +112,7 @@ namespace aisilol.Game
             Fire(Time.deltaTime);
 
             ProjectileCount = _positions.Length;
-            _renderer.Render(_matrices.AsArray(), _enemies ? _enemies.Camera : null);
+            _renderer.Render(_matrices.AsArray(), _enemies ? _enemies.CullingCamera : null);
         }
 
         private void OnDestroy()

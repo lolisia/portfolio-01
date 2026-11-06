@@ -11,3 +11,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
+
+# AI 에이전트 지침 / 로컬 설정
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude/

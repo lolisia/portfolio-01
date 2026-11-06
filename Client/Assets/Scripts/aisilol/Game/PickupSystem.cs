@@ -170,7 +170,7 @@ namespace aisilol.Game
             ExperienceObjectCount = _experience.positions.Length;
             PotionCount = _potions.positions.Length;
 
-            var camera = _enemies ? _enemies.Camera : null;
+            var camera = _enemies ? _enemies.CullingCamera : null;
             _experienceRenderer.Render(_experience.matrices.AsArray(), _experience.tiers.AsArray(), camera);
             _potionRenderer.Render(_potions.matrices.AsArray(), camera);
         }

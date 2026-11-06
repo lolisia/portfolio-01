@@ -74,6 +74,10 @@ namespace aisilol.Game
         [SerializeField]
         public AnimationCurve enemyHealthMultiplier = new(new Keyframe(0, 1), new Keyframe(60, 1), new Keyframe(300, 4));
 
+        [SetInspectorName("시야 밖 렌더링 제외(컬링)")]
+        [SerializeField]
+        public bool useCulling = true;
+
         [SetInspectorName("프레임당 최대 생성 수")]
         [SerializeField]
         public int maxSpawnPerFrame = 100;
@@ -252,6 +256,7 @@ namespace aisilol.Game
             _enemyManager.SpawnPerSecond = CalcSpawnPerSecond(_experience.Level);
             _enemyManager.MinSpawnFps = minSpawnFps;
             _enemyManager.MaxSpawnPerFrame = maxSpawnPerFrame;
+            _enemyManager.UseCulling = useCulling;
             _enemyManager.HealthMultiplier = enemyHealthMultiplier.Evaluate(ElapsedTime);
 
             // 경험치는 Enemy 처치가 아니라 떨어진 경험치 Object를 획득해야 증가
@@ -350,7 +355,7 @@ namespace aisilol.Game
                 return;
 
             var throttled = _enemyManager.IsSpawnThrottled ? " (spawn paused)" : "";
-            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0}{throttled}\nFPS : {CalcFPS():F1}\n" +
+            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0} (visible {_enemyManager.VisibleCount:N0}){throttled}\nFPS : {CalcFPS():F1}\n" +
                        $"Time : {FormatTime(ElapsedTime)}\nKills : {_enemyManager.KillCount:N0}";
             uiText.SetText(text);
         }
