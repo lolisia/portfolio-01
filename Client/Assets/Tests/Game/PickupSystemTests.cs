@@ -150,6 +150,7 @@ namespace aisilol.Tests.Game
             NullPotionPrefab,
             NullStats,
             InstancingDisabled,
+            ExperienceInstancingDisabled,
         }
 
         [UnityTest]
@@ -171,9 +172,13 @@ namespace aisilol.Tests.Game
                 case InvalidSetup.InstancingDisabled:
                     potionPrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: false);
                     break;
+                case InvalidSetup.ExperienceInstancingDisabled:
+                    experiencePrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: false);
+                    break;
             }
 
-            LogAssert.Expect(LogType.Error, TestHelper.Pattern(setup == InvalidSetup.InstancingDisabled ? "GPU Instancing이 꺼져 있습니다" : "인자가 null 입니다"));
+            var instancingError = setup is InvalidSetup.InstancingDisabled or InvalidSetup.ExperienceInstancingDisabled;
+            LogAssert.Expect(LogType.Error, TestHelper.Pattern(instancingError ? "GPU Instancing이 꺼져 있습니다" : "인자가 null 입니다"));
 
             _enemies.Initialize(_player, _gameCamera, _enemyPrefab);
             _pickups.Initialize(player, enemies, experiencePrefab, potionPrefab, 25, stats);
@@ -192,7 +197,7 @@ namespace aisilol.Tests.Game
             using var collected = new NativeArray<byte>(3, Allocator.TempJob);
             using var matrices = new NativeArray<Matrix4x4>(3, Allocator.TempJob);
 
-            new PickupSystem.MoveJob
+            var job = new PickupSystem.MoveJob
             {
                 positions = positions,
                 tiers = tiers,
@@ -205,7 +210,9 @@ namespace aisilol.Tests.Game
                 deltaTime = 0.1f,
                 rotation = quaternion.identity,
                 scale = new float3(1),
-            }.Run(3);
+            };
+
+            job.Run(positions.Length);
 
             // 1m: 자석 범위 안. (3 + 1 * 4) * 0.1 = 0.7 이동
             Assert.AreEqual(1, attracted[0]);
@@ -229,7 +236,7 @@ namespace aisilol.Tests.Game
             using var collected = new NativeArray<byte>(1, Allocator.TempJob);
             using var matrices = new NativeArray<Matrix4x4>(1, Allocator.TempJob);
 
-            new PickupSystem.MoveJob
+            var job = new PickupSystem.MoveJob
             {
                 positions = positions,
                 tiers = tiers,
@@ -242,7 +249,9 @@ namespace aisilol.Tests.Game
                 deltaTime = 1,
                 rotation = quaternion.identity,
                 scale = new float3(1),
-            }.Run(1);
+            };
+
+            job.Run(1);
 
             // 남은 거리보다 많이 움직이지 않고 플레이어 위치에서 획득
             Assert.AreEqual(0, positions[0].x, 1e-5f);
