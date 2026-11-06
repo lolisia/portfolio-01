@@ -85,10 +85,12 @@ jobs:
           dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug -p:SonarQubeTestProject=false
 
       # PlayMode tests cover the MonoBehaviour lifecycle; the OpenCover report is picked up by `sonarscanner end`.
+      # Burst-compiled jobs run as native code that code coverage cannot see, so run them as managed C# here.
       - name: Run tests with coverage
         run: |
           unity-editor -batchmode -nographics -logFile - \
             -projectPath "$PROJECT_PATH" \
+            -burst-disable-compilation \
             -runTests -testPlatform PlayMode \
             -testResults "$GITHUB_WORKSPACE/$TEST_ARTIFACTS_DIR/test-results.xml" \
             -debugCodeOptimization -enableCodeCoverage \
