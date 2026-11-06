@@ -249,6 +249,13 @@ namespace aisilol.Tests.Game
             Assert.AreEqual(1, collected[0]);
         }
 
+        // float 값은 허용 오차 안이면 같은 값으로 판정
+        private static bool Near(float value, float expected) => System.Math.Abs(value - expected) < 1e-4f;
+
+        private static int CountNear(float[] values, float expected) => values.Count(value => Near(value, expected));
+
+        private static int IndexNear(float[] values, float expected) => System.Array.FindIndex(values, value => Near(value, expected));
+
         private struct MergeResult
         {
             public float[] values;
@@ -288,11 +295,11 @@ namespace aisilol.Tests.Game
             var positions = Enumerable.Range(0, 12).Select(index => new float3(0.05f * index, 0, 0.5f)).ToArray();
             var result = RunMergeJob(positions, new int[12]);
 
-            Assert.AreEqual(1, result.values.Count(value => value == 10));
-            Assert.AreEqual(2, result.values.Count(value => value == 1));
-            Assert.AreEqual(9, result.values.Count(value => value == 0));
+            Assert.AreEqual(1, CountNear(result.values, 10));
+            Assert.AreEqual(2, CountNear(result.values, 1));
+            Assert.AreEqual(9, CountNear(result.values, 0));
 
-            var merged = System.Array.IndexOf(result.values, 10f);
+            var merged = IndexNear(result.values, 10);
             Assert.AreEqual(1, result.tiers[merged]);
             Assert.AreEqual(0.225f, result.positions[merged].x, 1e-4f);     // 앞의 10개 중심
         }
@@ -307,9 +314,9 @@ namespace aisilol.Tests.Game
 
             var result = RunMergeJob(positions, tiers, values: values);
 
-            Assert.AreEqual(1, result.values.Count(value => value == 100));
-            Assert.AreEqual(9, result.values.Count(value => value == 0));
-            Assert.AreEqual(2, result.tiers[System.Array.IndexOf(result.values, 100f)]);
+            Assert.AreEqual(1, CountNear(result.values, 100));
+            Assert.AreEqual(9, CountNear(result.values, 0));
+            Assert.AreEqual(2, result.tiers[IndexNear(result.values, 100)]);
         }
 
         [Test]
@@ -340,7 +347,7 @@ namespace aisilol.Tests.Game
 
             var result = RunMergeJob(positions, tiers, attracted);
 
-            Assert.IsTrue(result.values.All(value => value == 1));
+            Assert.AreEqual(result.values.Length, CountNear(result.values, 1));
         }
     }
 }
