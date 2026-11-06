@@ -848,6 +848,9 @@ MonoBehaviour:
   gameCameraPrefab: {fileID: 3276527150215931244, guid: 9e3a511cba4ddc4499102f48a5b2ded7, type: 3}
   floorPrefab: {fileID: 6443224532718773943, guid: ef6d270e1028a014191c8252ea80dcb2, type: 3}
   projectilePrefab: {fileID: 7241594084767384626, guid: 36f34aba23629dd4b982725a48d8b667, type: 3}
+  experiencePrefab: {fileID: 7241594084767384626, guid: a90234544a1540a2845dd7b23a6fcb47, type: 3}
+  potionPrefab: {fileID: 7241594084767384626, guid: 423de80c796f48369f3a4e2b114e8f9b, type: 3}
+  potionHeal: 30
   upgrades:
   - {fileID: 11400000, guid: c30b80afb43de0448a8ca0f5ea68447a, type: 2}
   - {fileID: 11400000, guid: a4c392cda1cc7844a93029ed5cdc98a2, type: 2}
@@ -857,57 +860,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 620b2172e1378e647902c525ec07ab4a, type: 2}
   - {fileID: 11400000, guid: a3b302a68113a714fbb98afea8a5b691, type: 2}
   - {fileID: 11400000, guid: 0272d808c57044f8ae5916fe84c9b75f, type: 2}
-  spawnPerSecond:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 1
-      value: 15
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 3
-      value: 40
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 5
-      value: 80
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 10
-      value: 250
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 20
-      value: 800
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
+  - {fileID: 11400000, guid: 83c6c2d0960b49dc92eb27811f2f5bd9, type: 2}
+  spawnPerSecondBase: 15
+  spawnPerSecondGrowth: 1.3
   enemyHealthMultiplier:
     serializedVersion: 2
     m_Curve:

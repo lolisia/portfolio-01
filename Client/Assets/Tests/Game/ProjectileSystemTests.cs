@@ -32,6 +32,7 @@ namespace aisilol.Tests.Game
             enemyPrefab.GetComponent<MeshRenderer>().sharedMaterial = _helper.CreateMaterial(enableInstancing: true);
 
             _enemies = new GameObject("EnemyManager").AddComponent<EnemyManager>();
+            _enemies.MinSpawnFps = 0;
             _enemies.Initialize(_player, gameCamera, enemyPrefab);
 
             _projectilePrefab = _helper.CreateTemplate(PrimitiveType.Sphere, "Projectile");

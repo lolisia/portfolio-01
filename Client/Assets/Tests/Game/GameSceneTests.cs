@@ -40,6 +40,8 @@ namespace aisilol.Tests.Game
 
             // 투사체 Prefab / 강화 에셋이 연결되어 있고 HUD가 만들어짐
             Assert.IsNotNull(gameManager.GetComponent<ProjectileSystem>());
+            Assert.IsNotNull(gameManager.experiencePrefab);
+            Assert.IsNotNull(gameManager.potionPrefab);
             Assert.IsNotEmpty(gameManager.upgrades);
             CollectionAssert.AllItemsAreNotNull(gameManager.upgrades);
             Assert.IsNotNull(gameManager.Hud);

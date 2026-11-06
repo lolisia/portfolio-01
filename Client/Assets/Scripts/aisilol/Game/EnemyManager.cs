@@ -21,16 +21,17 @@ namespace aisilol.Game
     // LateUpdate : 모든 Job 완료 → 위치 버퍼 교체 → 데미지 적용 / 사망 제거 → 렌더링
     public class EnemyManager : MonoBehaviour
     {
-        private const float MaxSpawnDistance = 200;     // 지평선이 보이는 경우 무한히 멀어지지 않도록 제한하는 최대 거리
+        private const float MaxSpawnDistance = 200;     // 크게 줌 아웃하거나 지평선이 보이는 경우 무한히 멀어지지 않도록 제한하는 최대 거리. 이 경우 화면 안에서 생성될 수 있음
         private const int InitialCapacity = 1024;
         private const int JobBatchCount = 64;
-        private const int MaxEnemyCount = 30000;
+        private const float FpsSmoothingTime = 0.5f;    // 평균 FPS 계산에 반영하는 시간(초). 순간적인 끊김으로 생성이 멈추지 않도록 완만하게
         private const float SeparationSpeed = 1;        // 완전히 겹쳤을 때 서로 밀어내는 속도(m/s)
         private const int MaxSeparationNeighbors = 16;  // 밀집 지역에서 Enemy 1개당 확인하는 이웃 수 제한
 
         private GameObject _player;
         private Camera _gameCamera;
         private InstancedMesh _mesh;
+        private InstanceRenderer _renderer;
 
         private Vector2 _speedRange;
         private float _maxHealth;
@@ -51,6 +52,8 @@ namespace aisilol.Game
         private NativeParallelMultiHashMap<int2, int> _grid;
         private NativeQueue<EnemyDamage> _damageQueue;
         private NativeReference<int> _contactCount;
+        private NativeList<float3> _deathPositions;     // 이번 프레임 LateUpdate에서 사망한 Enemy 위치
+        private NativeReference<int> _killCount;
         private readonly List<EnemyDamage> _pendingDamages = new();
 
         private JobHandle _gridHandle;
@@ -58,6 +61,7 @@ namespace aisilol.Game
 
         private float _spawnEnemyDistance;
         private float _spawnAccumulator;
+        private float _averageFrameTime;
 
         // Job이 실행 중일 때도 읽을 수 있도록 NativeList 길이 대신 별도로 관리
         public int EnemyCount { get; private set; }
@@ -69,6 +73,14 @@ namespace aisilol.Game
         public float SpawnPerSecond { get; set; } = 60;
         public float HealthMultiplier { get; set; } = 1;
 
+        // 평균 FPS가 이 값보다 낮으면 생성 중지. Enemy 수는 고정 상한 없이 기기 성능에 맞춰 정해짐
+        public float MinSpawnFps { get; set; } = 60;
+
+        // 한 프레임에 생성하는 최대 수. 초당 생성 수가 커져도 한 프레임에 몰려 생성되지 않음
+        public int MaxSpawnPerFrame { get; set; } = 100;
+        public float AverageFps => _averageFrameTime > 0 ? 1 / _averageFrameTime : float.PositiveInfinity;
+        public bool IsSpawnThrottled => AverageFps < MinSpawnFps;
+
         internal bool IsReady => _positions.IsCreated;
 
         // 이번 프레임의 격자가 예약되어 있는지. true인 동안만 Positions / Grid를 읽는 Job을 예약할 수 있음
@@ -78,7 +90,11 @@ namespace aisilol.Game
         internal JobHandle GridHandle => _gridHandle;
         internal float InverseCellSize => _inverseCellSize;
         internal float Radius => _radius;
+        internal Camera Camera => _gameCamera;
         internal NativeQueue<EnemyDamage>.ParallelWriter DamageWriter => _damageQueue.AsParallelWriter();
+
+        // 다음 LateUpdate 전까지 유효. 드롭 생성에 사용
+        internal NativeArray<float3> DeathPositions => _deathPositions.AsArray();
 
         public void Initialize(GameObject player, GameCamera gameCamera, GameObject enemyPrefab)
         {
@@ -141,6 +157,9 @@ namespace aisilol.Game
             _grid = new NativeParallelMultiHashMap<int2, int>(InitialCapacity, Allocator.Persistent);
             _damageQueue = new NativeQueue<EnemyDamage>(Allocator.Persistent);
             _contactCount = new NativeReference<int>(Allocator.Persistent);
+            _deathPositions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
+            _killCount = new NativeReference<int>(Allocator.Persistent);
+            _renderer = new InstanceRenderer(_mesh);
         }
 
         // 메인 스레드에서 데미지 예약. LateUpdate에서 Job이 기록한 데미지와 함께 적용
@@ -160,6 +179,7 @@ namespace aisilol.Game
             if (!_positions.IsCreated || !_player)
                 return;
 
+            UpdateAverageFrameTime(Time.unscaledDeltaTime);
             Spawn();
 
             var count = _positions.Length;
@@ -224,7 +244,7 @@ namespace aisilol.Game
 
             ApplyDamages();
 
-            _mesh.Render(_matrices.AsArray());
+            _renderer.Render(_matrices.AsArray(), _gameCamera);
         }
 
         private void OnDestroy()
@@ -255,71 +275,70 @@ namespace aisilol.Game
 
             if (_contactCount.IsCreated)
                 _contactCount.Dispose();
+
+            if (_deathPositions.IsCreated)
+                _deathPositions.Dispose();
+
+            if (_killCount.IsCreated)
+                _killCount.Dispose();
+
+            _renderer?.Dispose();
+            _renderer = null;
         }
 
         // 모든 데미지를 먼저 적용한 뒤 사망한 Enemy를 제거. 데미지의 인덱스는 제거 전 기준
         private void ApplyDamages()
         {
-            var anyDead = false;
-
-            while (_damageQueue.TryDequeue(out var damage))
-                anyDead |= ApplyDamage(damage);
-
             foreach (var damage in _pendingDamages)
-                anyDead |= ApplyDamage(damage);
+                _damageQueue.Enqueue(damage);
 
             _pendingDamages.Clear();
 
-            if (!anyDead)
-                return;
-
-            // 뒤에서부터 제거하면 끝에서 옮겨 온 Enemy는 이미 확인한 Enemy
-            for (var index = _healths.Length - 1; index >= 0; --index)
+            new ApplyDamageJob
             {
-                if (_healths[index] > 0)
-                    continue;
+                damages = _damageQueue,
+                positions = _positions,
+                nextPositions = _nextPositions,
+                speeds = _speeds,
+                healths = _healths,
+                matrices = _matrices,
+                deathPositions = _deathPositions,
+                killCount = _killCount,
+            }.Run();
 
-                _positions.RemoveAtSwapBack(index);
-                _nextPositions.RemoveAtSwapBack(index);
-                _speeds.RemoveAtSwapBack(index);
-                _healths.RemoveAtSwapBack(index);
-                _matrices.RemoveAtSwapBack(index);
-                ++KillCount;
-            }
-
+            KillCount = _killCount.Value;
             EnemyCount = _positions.Length;
-        }
-
-        // 이번 데미지로 사망했으면 true. 이미 사망한 Enemy는 무시
-        private bool ApplyDamage(EnemyDamage damage)
-        {
-            if ((uint)damage.index >= (uint)_healths.Length)
-                return false;
-
-            var health = _healths[damage.index];
-            if (health <= 0)
-                return false;
-
-            health -= damage.amount;
-            _healths[damage.index] = health;
-            return health <= 0;
         }
 
         private void Spawn()
         {
-            // Spawn Distance가 아직 계산 전이면 Skip
-            if (Mathf.Approximately(_spawnEnemyDistance, MaxSpawnDistance) || _spawnEnemyDistance == 0)
+            // Spawn Distance가 아직 계산 전이면 Skip. 최대 거리로 제한된 경우에도 생성은 계속함
+            if (_spawnEnemyDistance <= 0)
             {
                 CalcSpawnEnemyDistance();
                 return;
             }
 
             // 프레임 속도와 관계없이 초당 생성 수를 유지하도록 소수점 이하는 다음 프레임으로 이월
-            _spawnAccumulator += SpawnPerSecond * Time.deltaTime;
-            var count = (int)_spawnAccumulator;
-            _spawnAccumulator -= count;
+            // FPS가 기준 아래면 생성하지 않고, 밀린 생성 수도 쌓지 않음
+            if (IsSpawnThrottled)
+            {
+                _spawnAccumulator = 0;
+                return;
+            }
 
-            count = Mathf.Min(count, MaxEnemyCount - _positions.Length);
+            // 상한을 넘은 생성 수는 이월하지 않고 버림. 생성 수가 매우 커도 int 변환이 넘치지 않도록 누적 전에 제한
+            var maxCount = Mathf.Max(0, MaxSpawnPerFrame);
+            var accumulated = _spawnAccumulator + SpawnPerSecond * Time.deltaTime;
+            if (!float.IsFinite(accumulated) || accumulated > maxCount)
+            {
+                _spawnAccumulator = 0;
+                accumulated = maxCount;
+            }
+
+            var count = (int)accumulated;
+            _spawnAccumulator = Mathf.Max(0, accumulated - count);
+
             var health = _maxHealth * HealthMultiplier;
 
             for (var index = 0; index < count; index++)
@@ -333,6 +352,22 @@ namespace aisilol.Game
             }
 
             EnemyCount = _positions.Length;
+        }
+
+        // 실제 경과 시간 기준 지수 이동 평균. timeScale의 영향을 받지 않음
+        private void UpdateAverageFrameTime(float frameTime)
+        {
+            if (frameTime <= 0)
+                return;
+
+            if (_averageFrameTime <= 0)
+            {
+                _averageFrameTime = frameTime;
+                return;
+            }
+
+            var weight = 1 - Mathf.Exp(-frameTime / FpsSmoothingTime);
+            _averageFrameTime = Mathf.Lerp(_averageFrameTime, frameTime, weight);
         }
 
         private void CalcSpawnEnemyDistance()
@@ -377,6 +412,58 @@ namespace aisilol.Game
             }
 
             return Mathf.Min(Mathf.Sqrt(maxSqrDistance), MaxSpawnDistance);
+        }
+
+        // 데미지 큐를 비우며 체력을 깎고, 사망한 Enemy를 swap-back으로 제거. 이미 사망했거나 범위 밖 인덱스는 무시
+        [BurstCompile]
+        internal struct ApplyDamageJob : IJob
+        {
+            public NativeQueue<EnemyDamage> damages;
+            public NativeList<float3> positions;
+            public NativeList<float3> nextPositions;
+            public NativeList<float> speeds;
+            public NativeList<float> healths;
+            public NativeList<Matrix4x4> matrices;
+            public NativeList<float3> deathPositions;
+            public NativeReference<int> killCount;
+
+            public void Execute()
+            {
+                deathPositions.Clear();
+                var anyDead = false;
+
+                while (damages.TryDequeue(out var damage))
+                {
+                    if ((uint)damage.index >= (uint)healths.Length)
+                        continue;
+
+                    var health = healths[damage.index];
+                    if (health <= 0)
+                        continue;
+
+                    health -= damage.amount;
+                    healths[damage.index] = health;
+                    anyDead |= health <= 0;
+                }
+
+                if (!anyDead)
+                    return;
+
+                // 뒤에서부터 제거하면 끝에서 옮겨 온 Enemy는 이미 확인한 Enemy
+                for (var index = healths.Length - 1; index >= 0; --index)
+                {
+                    if (healths[index] > 0)
+                        continue;
+
+                    deathPositions.Add(positions[index]);
+                    positions.RemoveAtSwapBack(index);
+                    nextPositions.RemoveAtSwapBack(index);
+                    speeds.RemoveAtSwapBack(index);
+                    healths.RemoveAtSwapBack(index);
+                    matrices.RemoveAtSwapBack(index);
+                    ++killCount.Value;
+                }
+            }
         }
 
         // 플레이어 방향 이동 + 주변 Enemy와 겹치지 않도록 밀어내기

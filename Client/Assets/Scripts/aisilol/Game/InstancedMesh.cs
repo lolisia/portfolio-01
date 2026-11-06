@@ -1,4 +1,4 @@
-using aisilol.Common;
+﻿using aisilol.Common;
 using Unity.Collections;
 using UnityEngine;
 
@@ -15,6 +15,8 @@ namespace aisilol.Game
         public Quaternion Rotation { get; }
         public Vector3 Scale { get; }
         public Vector3 Size { get; }    // Scale이 적용된 Mesh 크기
+        public float BoundsRadius { get; }  // Scale 1 기준, 원점에서 Mesh 전체를 감싸는 구의 반지름. 시야 판정에 사용
+        public Material Material => _renderParams.material;
 
         private InstancedMesh(Mesh mesh, RenderParams renderParams, Transform transform)
         {
@@ -23,6 +25,24 @@ namespace aisilol.Game
             Rotation = transform.localRotation;
             Scale = transform.localScale;
             Size = Vector3.Scale(mesh.bounds.size, Scale);
+            BoundsRadius = mesh.bounds.center.magnitude + mesh.bounds.extents.magnitude;
+        }
+
+        private InstancedMesh(InstancedMesh source, Material material)
+        {
+            _mesh = source._mesh;
+            _renderParams = source._renderParams;
+            _renderParams.material = material;
+            Rotation = source.Rotation;
+            Scale = source.Scale;
+            Size = source.Size;
+            BoundsRadius = source.BoundsRadius;
+        }
+
+        // 같은 Mesh / Transform 설정에 Material만 바꾼 복사본
+        public InstancedMesh WithMaterial(Material material)
+        {
+            return new InstancedMesh(this, material);
         }
 
         public static bool TryCreate(GameObject prefab, out InstancedMesh instancedMesh)
@@ -63,13 +83,12 @@ namespace aisilol.Game
             return true;
         }
 
-        public void Render(NativeArray<Matrix4x4> matrices)
+        // matrices[start] 부터 count개를 Draw Call 1회당 최대 1023개씩 렌더링
+        public void Render(NativeArray<Matrix4x4> matrices, int start, int count)
         {
-            for (var start = 0; start < matrices.Length; start += MaxInstancesPerDraw)
-            {
-                var count = Mathf.Min(MaxInstancesPerDraw, matrices.Length - start);
-                Graphics.RenderMeshInstanced(_renderParams, _mesh, 0, matrices, count, start);
-            }
+            var end = start + count;
+            for (var batch = start; batch < end; batch += MaxInstancesPerDraw)
+                Graphics.RenderMeshInstanced(_renderParams, _mesh, 0, matrices, Mathf.Min(MaxInstancesPerDraw, end - batch), batch);
         }
     }
 }

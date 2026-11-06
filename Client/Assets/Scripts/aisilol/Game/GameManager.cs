@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace aisilol.Game
 {
     // 게임 진행 상태 관리
-    // Playing : 레벨에 따라 Enemy 생성 수 증가, 처치 수만큼 경험치 획득, Enemy 접촉 시 피해
+    // Playing : 레벨에 따라 Enemy 생성 수 증가, 경험치 Object / HP 포션 획득, Enemy 접촉 시 피해
     // LevelUp : 일시 정지 후 강화 선택지 표시. 선택하면 Playing으로 복귀
     // GameOver: 체력이 0이 되면 일시 정지 후 결과 표시
     [RequireComponent(typeof(EnemyManager))]
@@ -43,20 +43,49 @@ namespace aisilol.Game
         [SerializeField]
         public GameObject projectilePrefab;
 
+        [SetInspectorName("경험치 Object Prefab")]
+        [SerializeField]
+        public GameObject experiencePrefab;
+
+        [SetInspectorName("HP 포션 Prefab")]
+        [SerializeField]
+        public GameObject potionPrefab;
+
+        [SetInspectorName("HP 포션 회복량")]
+        [SerializeField]
+        public float potionHeal = 30;
+
         [SetInspectorName("강화 목록")]
         [SerializeField]
         public UpgradeDefinition[] upgrades;
 
-        // 플레이어가 강해지는 만큼 Enemy 수도 늘어나도록 레벨 기준
+        // 플레이어가 강해지는 만큼 Enemy 수도 늘어나도록 레벨 기준 지수 증가. 생성 수 = 기본값 * 증가율^(레벨 - 1)
         [Header("난이도")]
-        [SetInspectorName("초당 Enemy 생성 수 (가로축: 레벨)")]
+        [SetInspectorName("초당 Enemy 생성 수 (1레벨)")]
         [SerializeField]
-        public AnimationCurve spawnPerSecond = new(new Keyframe(1, 15), new Keyframe(3, 40), new Keyframe(5, 80), new Keyframe(10, 250), new Keyframe(20, 800));
+        public float spawnPerSecondBase = 15;
+
+        [SetInspectorName("레벨당 생성 수 증가율 (배)")]
+        [SerializeField]
+        public float spawnPerSecondGrowth = 1.3f;
 
         // 첫 1분은 기본 공격 한 발에 처치되도록 배율 1 유지
         [SetInspectorName("Enemy 체력 배율 (가로축: 경과 시간(초))")]
         [SerializeField]
         public AnimationCurve enemyHealthMultiplier = new(new Keyframe(0, 1), new Keyframe(60, 1), new Keyframe(300, 4));
+
+        [SetInspectorName("프레임당 최대 생성 수")]
+        [SerializeField]
+        public int maxSpawnPerFrame = 100;
+
+        [SetInspectorName("생성 제한 FPS (평균 FPS가 이보다 낮으면 생성 중지)")]
+        [SerializeField]
+        public float minSpawnFps = 60;
+
+        // HP가 낮을수록 포션이 잘 나오도록 현재 HP 비율 기준
+        [SetInspectorName("HP 포션 드롭 확률 (가로축: HP 비율 0~1)")]
+        [SerializeField]
+        public AnimationCurve potionDropChance = new(new Keyframe(0, 0.05f), new Keyframe(0.5f, 0.015f), new Keyframe(1, 0.002f));
 
         [SerializeField]
         public TextMeshProUGUI uiText;
@@ -66,6 +95,7 @@ namespace aisilol.Game
         private const double FPSSampleInterval = 0.1;   // FPS 갱신 주기 (초)
 
         private EnemyManager _enemyManager;
+        private PickupSystem _pickups;
         private PlayerStats _stats;
         private GameHud _hud;
 
@@ -74,7 +104,6 @@ namespace aisilol.Game
         private readonly System.Random _random = new();
 
         private float _invincibleTimer;
-        private int _processedKills;
         private int _pendingLevelUps;
 
         private double _fpsSampleStartTime;
@@ -178,6 +207,10 @@ namespace aisilol.Game
             var projectileSystem = gameObject.AddComponent<ProjectileSystem>();
             projectileSystem.Initialize(player, _enemyManager, projectilePrefab, stats);
 
+            // 드롭 초기화
+            _pickups = gameObject.AddComponent<PickupSystem>();
+            _pickups.Initialize(player, _enemyManager, experiencePrefab, potionPrefab, potionHeal, stats);
+
             _stats = stats;
             Health = stats.Get(StatType.MaxHealth);
 
@@ -216,13 +249,16 @@ namespace aisilol.Game
         private void UpdatePlaying(float deltaTime)
         {
             ElapsedTime += deltaTime;
-            _enemyManager.SpawnPerSecond = spawnPerSecond.Evaluate(_experience.Level);
+            _enemyManager.SpawnPerSecond = CalcSpawnPerSecond(_experience.Level);
+            _enemyManager.MinSpawnFps = minSpawnFps;
+            _enemyManager.MaxSpawnPerFrame = maxSpawnPerFrame;
             _enemyManager.HealthMultiplier = enemyHealthMultiplier.Evaluate(ElapsedTime);
 
-            // 지난 프레임 이후 처치한 수만큼 경험치 획득
-            var kills = _enemyManager.KillCount - _processedKills;
-            _processedKills += kills;
-            _pendingLevelUps += _experience.Add(kills * _enemyManager.ExperiencePerKill);
+            // 경험치는 Enemy 처치가 아니라 떨어진 경험치 Object를 획득해야 증가
+            _pendingLevelUps += _experience.Add(_pickups.TakeExperience());
+
+            var maxHealth = _stats.Get(StatType.MaxHealth);
+            Health = Mathf.Min(maxHealth, Health + _pickups.TakeHealing());
 
             // 접촉 중인 Enemy 수와 관계없이 무적 시간마다 1회 피해
             _invincibleTimer -= deltaTime;
@@ -231,6 +267,8 @@ namespace aisilol.Game
                 Health = Mathf.Max(0, Health - _enemyManager.ContactDamage);
                 _invincibleTimer = InvincibleTime;
             }
+
+            _pickups.PotionDropChance = Mathf.Clamp01(potionDropChance.Evaluate(Health / Mathf.Max(1, _stats.Get(StatType.MaxHealth))));
 
             if (Health <= 0)
             {
@@ -282,6 +320,11 @@ namespace aisilol.Game
             Health += Mathf.Max(0, _stats.Get(StatType.MaxHealth) - maxHealth);
         }
 
+        public float CalcSpawnPerSecond(int level)
+        {
+            return spawnPerSecondBase * Mathf.Pow(spawnPerSecondGrowth, Mathf.Max(0, level - 1));
+        }
+
         private void SetState(GameState state)
         {
             State = state;
@@ -306,7 +349,8 @@ namespace aisilol.Game
             if (!uiText)
                 return;
 
-            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0}\nFPS : {CalcFPS():F1}\n" +
+            var throttled = _enemyManager.IsSpawnThrottled ? " (spawn paused)" : "";
+            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0}{throttled}\nFPS : {CalcFPS():F1}\n" +
                        $"Time : {FormatTime(ElapsedTime)}\nKills : {_enemyManager.KillCount:N0}";
             uiText.SetText(text);
         }

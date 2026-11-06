@@ -43,6 +43,10 @@ namespace aisilol.Game
         [SerializeField]
         public int pierce = 1;
 
+        [SetInspectorName("자석 범위(m)")]
+        [SerializeField]
+        public float magnetRange = 0.3f;
+
         private InputSystem_Actions _playerActions;
         private GameCamera _gameCamera;
         private PlayerStats _stats;
@@ -85,6 +89,7 @@ namespace aisilol.Game
             stats.SetBase(StatType.ProjectileSpeed, projectileSpeed);
             stats.SetBase(StatType.Range, range);
             stats.SetBase(StatType.Pierce, pierce);
+            stats.SetBase(StatType.Magnet, magnetRange);
             return stats;
         }
 
