@@ -155,7 +155,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 250, y: -150}
-  m_SizeDelta: {x: 400, y: 100}
+  m_SizeDelta: {x: 400, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &32475826
 MonoBehaviour:
@@ -847,6 +847,100 @@ MonoBehaviour:
   enemyPrefab: {fileID: 9170194975936919737, guid: 0266e191bb129dd46a6aa1b9af59dbe3, type: 3}
   gameCameraPrefab: {fileID: 3276527150215931244, guid: 9e3a511cba4ddc4499102f48a5b2ded7, type: 3}
   floorPrefab: {fileID: 6443224532718773943, guid: ef6d270e1028a014191c8252ea80dcb2, type: 3}
+  projectilePrefab: {fileID: 7241594084767384626, guid: 36f34aba23629dd4b982725a48d8b667, type: 3}
+  upgrades:
+  - {fileID: 11400000, guid: c30b80afb43de0448a8ca0f5ea68447a, type: 2}
+  - {fileID: 11400000, guid: a4c392cda1cc7844a93029ed5cdc98a2, type: 2}
+  - {fileID: 11400000, guid: 3320b4c3cb9a87e4e9a9e543e381a742, type: 2}
+  - {fileID: 11400000, guid: a89a3e39645ea0343ba3df037573f3b4, type: 2}
+  - {fileID: 11400000, guid: 8cf4bc651722ed34da3d4fdd3eb0c05d, type: 2}
+  - {fileID: 11400000, guid: 620b2172e1378e647902c525ec07ab4a, type: 2}
+  - {fileID: 11400000, guid: a3b302a68113a714fbb98afea8a5b691, type: 2}
+  - {fileID: 11400000, guid: 0272d808c57044f8ae5916fe84c9b75f, type: 2}
+  spawnPerSecond:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 1
+      value: 15
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 3
+      value: 40
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 5
+      value: 80
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 250
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 20
+      value: 800
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  enemyHealthMultiplier:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 60
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 300
+      value: 4
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   uiText: {fileID: 1589521856}
 --- !u!114 &1556686944
 MonoBehaviour:

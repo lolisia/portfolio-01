@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using aisilol.Game;
 using NUnit.Framework;
 using UnityEngine;
@@ -32,8 +32,17 @@ namespace aisilol.Tests.Game
             var gameManager = Object.FindAnyObjectByType<GameManager>();
             Assert.IsNotNull(gameManager);
             Assert.IsNotNull(Object.FindAnyObjectByType<PlayerController>());
-            Assert.Greater(gameManager.GetComponent<EnemySpawner>().EnemyCount, 0);
+
+            // 초당 생성 수 기준이라 첫 Enemy가 나올 때까지 대기
+            yield return TestHelper.WaitUntil(() => gameManager.GetComponent<EnemyManager>().EnemyCount > 0);
+            Assert.Greater(gameManager.GetComponent<EnemyManager>().EnemyCount, 0);
             StringAssert.StartsWith("Enemy Count: ", gameManager.uiText.text);
+
+            // 투사체 Prefab / 강화 에셋이 연결되어 있고 HUD가 만들어짐
+            Assert.IsNotNull(gameManager.GetComponent<ProjectileSystem>());
+            Assert.IsNotEmpty(gameManager.upgrades);
+            CollectionAssert.AllItemsAreNotNull(gameManager.upgrades);
+            Assert.IsNotNull(gameManager.Hud);
         }
 
         [UnityTest]
