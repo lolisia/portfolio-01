@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using aisilol.Game;
 using NUnit.Framework;
 using UnityEngine;
@@ -83,6 +83,43 @@ namespace aisilol.Tests.Game
             yield return TestHelper.WaitFrames(2);
 
             Assert.AreEqual(Vector3.zero, _player.transform.position);
+        }
+
+        [UnityTest]
+        public IEnumerator Update_WithStats_UsesStatMoveSpeed()
+        {
+            var stats = _player.CreateStats();
+            stats.SetBase(StatType.MoveSpeed, 0);
+            _player.Initialize(new GameObject("GameCamera").AddComponent<GameCamera>(), stats);
+
+            Press(_keyboard.dKey);
+            yield return TestHelper.WaitFrames(5);
+            Release(_keyboard.dKey);
+
+            Assert.AreEqual(0, _player.transform.position.x, 1e-5f);
+        }
+
+        [Test]
+        public void CreateStats_CopiesBaseValues()
+        {
+            _player.maxHealth = 50;
+            _player.damage = 2;
+            _player.fireInterval = 0.25f;
+            _player.projectileCount = 3;
+            _player.projectileSpeed = 12;
+            _player.range = 4;
+            _player.pierce = 2;
+
+            var stats = _player.CreateStats();
+
+            Assert.AreEqual(50, stats.Get(StatType.MaxHealth));
+            Assert.AreEqual(5, stats.Get(StatType.MoveSpeed));
+            Assert.AreEqual(2, stats.Get(StatType.Damage));
+            Assert.AreEqual(0.25f, stats.Get(StatType.FireInterval));
+            Assert.AreEqual(3, stats.Get(StatType.ProjectileCount));
+            Assert.AreEqual(12, stats.Get(StatType.ProjectileSpeed));
+            Assert.AreEqual(4, stats.Get(StatType.Range));
+            Assert.AreEqual(2, stats.Get(StatType.Pierce));
         }
 
         [Test]
