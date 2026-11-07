@@ -287,6 +287,39 @@ namespace aisilol.Tests.Game
             Assert.AreEqual(10, _gameManager.CalcSpawnPerSecond(0));
         }
 
+        [Test]
+        public void CalcEnemyHealthMultiplier_GrowsLinearlyByLevel()
+        {
+            // 기본값: 100레벨에서 기본 체력 2 → 약 50
+            Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(1), 1e-5f);
+            Assert.AreEqual(1.24f, _gameManager.CalcEnemyHealthMultiplier(2), 1e-5f);
+            Assert.AreEqual(49.52f, 2 * _gameManager.CalcEnemyHealthMultiplier(100), 1e-3f);
+            Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(0), 1e-5f);
+
+            _gameManager.enemyHealthGrowthPerLevel = -1;
+            Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(10), 1e-5f);
+        }
+
+        [UnityTest]
+        public IEnumerator Update_AppliesLevelHealthMultiplierToEnemies()
+        {
+            _gameManager.enemyHealthGrowthPerLevel = 0.5f;
+            _gameManager.gameObject.SetActive(true);
+            yield return TestHelper.WaitFrames(2);
+
+            var enemies = _gameManager.GetComponent<EnemyManager>();
+            Assert.AreEqual(1, enemies.HealthMultiplier, 1e-5f);
+
+            // 2레벨로 올리고 강화를 고르면 이후 생성되는 Enemy 체력 1.5배
+            _gameManager.GainExperience(Experience.RequiredFor(1));
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
+            _gameManager.SelectUpgrade(0);
+            yield return TestHelper.WaitFrames(2);
+
+            Assert.AreEqual(2, _gameManager.Experience.Level);
+            Assert.AreEqual(1.5f, enemies.HealthMultiplier, 1e-5f);
+        }
+
         [UnityTest]
         public IEnumerator SelectUpgrade_NotLevelUp_IsIgnored()
         {

@@ -69,10 +69,10 @@ namespace aisilol.Game
         [SerializeField]
         public float spawnPerSecondGrowth = 1.3f;
 
-        // 첫 1분은 기본 공격 한 발에 처치되도록 배율 1 유지
-        [SetInspectorName("Enemy 체력 배율 (가로축: 경과 시간(초))")]
+        // 플레이어 레벨에 비례해 증가. 체력 배율 = 1 + 증가량 * (레벨 - 1). 기본값이면 100레벨에서 약 25배(체력 2 → 약 50)
+        [SetInspectorName("레벨당 Enemy 체력 배율 증가량")]
         [SerializeField]
-        public AnimationCurve enemyHealthMultiplier = new(new Keyframe(0, 1), new Keyframe(60, 1), new Keyframe(300, 4));
+        public float enemyHealthGrowthPerLevel = 0.24f;
 
         [SetInspectorName("시야 밖 렌더링 제외(컬링)")]
         [SerializeField]
@@ -273,7 +273,7 @@ namespace aisilol.Game
             _enemyManager.UseCulling = useCulling;
             _enemyManager.UseGpuRendering = useGpuRendering;
             _pickups.MaxExperienceObjects = maxExperienceObjects;
-            _enemyManager.HealthMultiplier = enemyHealthMultiplier.Evaluate(ElapsedTime);
+            _enemyManager.HealthMultiplier = CalcEnemyHealthMultiplier(_experience.Level);
 
             // 경험치는 Enemy 처치가 아니라 떨어진 경험치 Object를 획득해야 증가
             GainExperience(_pickups.TakeExperience());
@@ -355,6 +355,12 @@ namespace aisilol.Game
         public float CalcSpawnPerSecond(int level)
         {
             return spawnPerSecondBase * Mathf.Pow(spawnPerSecondGrowth, Mathf.Max(0, level - 1));
+        }
+
+        // 1레벨은 1배. 증가량이 음수여도 1배 아래로 내려가지 않음
+        public float CalcEnemyHealthMultiplier(int level)
+        {
+            return Mathf.Max(1, 1 + enemyHealthGrowthPerLevel * Mathf.Max(0, level - 1));
         }
 
         private void SetState(GameState state)
