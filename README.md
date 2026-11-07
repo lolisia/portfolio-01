@@ -43,7 +43,7 @@
 - 맞힌 Enemy는 `NativeQueue` 데미지 큐에 기록하고, EnemyManager가 LateUpdate에서 일괄 적용. 데미지를 기록하는 Job끼리는 순서대로 연결
 
 **무기** ([WeaponSystem.cs](Client/Assets/Scripts/aisilol/Game/WeaponSystem.cs))
-- 오라: 틱마다 플레이어 주변 반경 안의 Enemy에 피해. 레벨당 범위 +0.35m(1레벨 1.5m), 초당 틱 수 +15%(1레벨 0.5초 간격), 틱당 피해 +0.5%p(1레벨 Damage의 10%)
+- 오라: 틱마다 플레이어 주변 반경 안의 Enemy에 피해. 레벨당 범위 +0.035m(1레벨 0.15m), 초당 틱 수 +15%(1레벨 0.5초 간격), 틱당 피해 +0.5%p(1레벨 Damage의 10%)
 - 칼날: 플레이어 주위를 도는 칼날에 닿은 Enemy에 초당 피해. 칼날마다 `IJobParallelFor`
 - 연쇄 번개: 1초마다 가까운 Enemy를 맞히고, 맞히지 않은 가장 가까운 Enemy로 이어서 튐
 - 모두 Enemy 격자를 검색하는 Burst Job. 강화(Aura / Orbit / Chain)로 획득
