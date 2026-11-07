@@ -130,11 +130,11 @@ namespace aisilol.Tests.Game
             Assert.AreEqual(1.5f, WeaponSystem.AuraRadiusFor(1), 1e-5f);
             Assert.AreEqual(4.65f, WeaponSystem.AuraRadiusFor(10), 1e-5f);
 
-            // 틱 속도는 레벨당 15%씩 빨라지고, 틱당 피해는 Damage의 50%에서 레벨당 10%p 증가
+            // 틱 속도는 레벨당 15%씩 빨라지고, 틱당 피해는 Damage의 10%에서 레벨당 0.5%p 증가
             Assert.AreEqual(0.5f, WeaponSystem.AuraTickIntervalFor(1), 1e-5f);
             Assert.AreEqual(0.5f / 2.35f, WeaponSystem.AuraTickIntervalFor(10), 1e-5f);
-            Assert.AreEqual(0.5f, WeaponSystem.AuraDamageRatioFor(1), 1e-5f);
-            Assert.AreEqual(1.4f, WeaponSystem.AuraDamageRatioFor(10), 1e-5f);
+            Assert.AreEqual(0.1f, WeaponSystem.AuraDamageRatioFor(1), 1e-5f);
+            Assert.AreEqual(0.145f, WeaponSystem.AuraDamageRatioFor(10), 1e-5f);
         }
 
         [UnityTest]

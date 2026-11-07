@@ -290,10 +290,11 @@ namespace aisilol.Tests.Game
         [Test]
         public void CalcEnemyHealthMultiplier_GrowsLinearlyByLevel()
         {
-            // 기본값: 100레벨에서 기본 체력 2 → 약 50
+            // 기본값: 30레벨까지 1배, 이후 증가해 100레벨에서 기본 체력 2 → 약 50
             Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(1), 1e-5f);
-            Assert.AreEqual(1.24f, _gameManager.CalcEnemyHealthMultiplier(2), 1e-5f);
-            Assert.AreEqual(49.52f, 2 * _gameManager.CalcEnemyHealthMultiplier(100), 1e-3f);
+            Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(30), 1e-5f);
+            Assert.AreEqual(1.34f, _gameManager.CalcEnemyHealthMultiplier(31), 1e-5f);
+            Assert.AreEqual(49.6f, 2 * _gameManager.CalcEnemyHealthMultiplier(100), 1e-3f);
             Assert.AreEqual(1, _gameManager.CalcEnemyHealthMultiplier(0), 1e-5f);
 
             _gameManager.enemyHealthGrowthPerLevel = -1;
@@ -303,6 +304,7 @@ namespace aisilol.Tests.Game
         [UnityTest]
         public IEnumerator Update_AppliesLevelHealthMultiplierToEnemies()
         {
+            _gameManager.enemyHealthStartLevel = 1;
             _gameManager.enemyHealthGrowthPerLevel = 0.5f;
             _gameManager.gameObject.SetActive(true);
             yield return TestHelper.WaitFrames(2);
@@ -350,6 +352,75 @@ namespace aisilol.Tests.Game
 
             Assert.IsFalse(hud.LevelUpPanel.activeSelf);
             Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
+        }
+
+        private int AppliedUpgradeCount() => _gameManager.upgrades.Sum(upgrade => _gameManager.Stats.GetLevel(upgrade));
+
+        [UnityTest]
+        public IEnumerator AutoSelectUpgrade_LevelUps_ApplyWithoutPause()
+        {
+            _gameManager.autoSelectUpgrade = true;
+            AttachCanvas();
+            _gameManager.gameObject.SetActive(true);
+            yield return null;
+            Assert.IsTrue(_gameManager.Hud.AutoSelectToggle.isOn);
+
+            // 한 번에 2레벨 상승. 멈추지 않고 2번 모두 적용
+            _gameManager.GainExperience(Experience.RequiredFor(1) + Experience.RequiredFor(2));
+            yield return TestHelper.WaitFrames(2);
+
+            Assert.AreEqual(3, _gameManager.Experience.Level);
+            Assert.AreEqual(2, AppliedUpgradeCount());
+            Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
+            Assert.IsFalse(_gameManager.Hud.LevelUpPanel.activeSelf);
+        }
+
+        [UnityTest]
+        public IEnumerator AutoSelectUpgrade_AllMaxed_StopsWithoutPause()
+        {
+            // 강화 2개 모두 최대 1레벨. 3레벨이 올라도 2개만 적용하고 진행
+            _gameManager.upgrades = new[]
+            {
+                _helper.CreateUpgrade(StatType.MaxHealth, ModifierType.Add, 20, maxLevel: 1),
+                _helper.CreateUpgrade(StatType.Damage, ModifierType.Percent, 0.5f, maxLevel: 1),
+            };
+            _gameManager.autoSelectUpgrade = true;
+            _gameManager.gameObject.SetActive(true);
+            yield return null;
+
+            _gameManager.GainExperience(Experience.RequiredFor(1) + Experience.RequiredFor(2) + Experience.RequiredFor(3));
+            yield return TestHelper.WaitFrames(2);
+
+            Assert.AreEqual(4, _gameManager.Experience.Level);
+            Assert.AreEqual(2, AppliedUpgradeCount());
+            Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
+        }
+
+        [UnityTest]
+        public IEnumerator AutoSelectToggle_OnDuringLevelUp_SelectsImmediately()
+        {
+            AttachCanvas();
+            _gameManager.gameObject.SetActive(true);
+            yield return null;
+
+            var toggle = _gameManager.Hud.AutoSelectToggle;
+            Assert.IsFalse(toggle.isOn);
+
+            _gameManager.GainExperience(Experience.RequiredFor(1));
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
+
+            toggle.isOn = true;
+            Assert.IsTrue(_gameManager.autoSelectUpgrade);
+            Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
+            Assert.IsFalse(_gameManager.Hud.LevelUpPanel.activeSelf);
+            Assert.AreEqual(1, AppliedUpgradeCount());
+
+            // 끄면 다음 레벨업부터 다시 멈추고 선택
+            toggle.isOn = false;
+            Assert.IsFalse(_gameManager.autoSelectUpgrade);
+            _gameManager.GainExperience(Experience.RequiredFor(2));
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
+            Assert.AreEqual(GameManager.GameState.LevelUp, _gameManager.State);
         }
 
         [UnityTest]

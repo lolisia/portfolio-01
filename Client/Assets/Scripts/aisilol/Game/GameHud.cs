@@ -6,12 +6,13 @@ using UnityEngine.UI;
 
 namespace aisilol.Game
 {
-    // 체력/경험치 바, 레벨업 선택지, 결과 화면. Canvas 아래에 코드로 구성
+    // 체력/경험치 바, 강화 자동 선택 체크박스, 레벨업 선택지, 결과 화면. Canvas 아래에 코드로 구성
     public sealed class GameHud
     {
         private static readonly Color PanelColor = new(0, 0, 0, 0.75f);
         private static readonly Color ButtonColor = new(0.2f, 0.2f, 0.25f, 1);
         private static readonly Color BarBackgroundColor = new(0, 0, 0, 0.6f);
+        private static readonly Color CheckColor = new(0.3f, 0.9f, 0.4f, 1);
 
         private readonly RectTransform _healthFill;
         private readonly RectTransform _experienceFill;
@@ -25,9 +26,10 @@ namespace aisilol.Game
         internal GameObject GameOverPanel { get; }
 
         internal IReadOnlyList<Button> ChoiceButtons => _choiceButtons;
+        internal Toggle AutoSelectToggle { get; }
         internal TextMeshProUGUI ResultText { get; }
 
-        public GameHud(Canvas canvas, int choiceCount, Action<int> onSelect, Action onRestart)
+        public GameHud(Canvas canvas, int choiceCount, Action<int> onSelect, Action onRestart, bool autoSelect = false, Action<bool> onAutoSelectChanged = null)
         {
             var root = CreateRect("HUD", canvas.transform);
             Stretch(root);
@@ -41,6 +43,11 @@ namespace aisilol.Game
             levelRect.anchorMin = levelRect.anchorMax = levelRect.pivot = new Vector2(1, 1);
             levelRect.anchoredPosition = new Vector2(-16, -20);
             levelRect.sizeDelta = new Vector2(200, 40);
+
+            // 레벨 아래 강화 자동 선택
+            AutoSelectToggle = CreateToggle("AutoSelectToggle", root, new Vector2(-16, -64), "Auto Upgrade", autoSelect);
+            if (onAutoSelectChanged != null)
+                AutoSelectToggle.onValueChanged.AddListener(value => onAutoSelectChanged(value));
 
             // 레벨업 선택지
             LevelUpPanel = CreatePanel("LevelUpPanel", root, new Vector2(420, 120 + choiceCount * 80));
@@ -176,6 +183,40 @@ namespace aisilol.Game
             rect.anchoredPosition = new Vector2(0, -12);
             rect.sizeDelta = new Vector2(360, 48);
             text.SetText(title);
+        }
+
+        // position은 부모 오른쪽 위 기준. 체크 상자 + 라벨
+        private static Toggle CreateToggle(string name, Transform parent, Vector2 position, string text, bool isOn)
+        {
+            var rect = CreateRect(name, parent);
+            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 1);
+            rect.anchoredPosition = position;
+            rect.sizeDelta = new Vector2(200, 32);
+
+            var box = CreateImage("Box", rect, ButtonColor);
+            var boxRect = box.rectTransform;
+            boxRect.anchorMin = boxRect.anchorMax = boxRect.pivot = new Vector2(1, 0.5f);
+            boxRect.anchoredPosition = Vector2.zero;
+            boxRect.sizeDelta = new Vector2(28, 28);
+
+            var check = CreateImage("Check", boxRect, CheckColor);
+            var checkRect = check.rectTransform;
+            Stretch(checkRect);
+            checkRect.offsetMin = new Vector2(5, 5);
+            checkRect.offsetMax = new Vector2(-5, -5);
+            check.raycastTarget = false;
+
+            var label = CreateText("Label", rect, 20, TextAlignmentOptions.Right);
+            var labelRect = label.rectTransform;
+            Stretch(labelRect);
+            labelRect.offsetMax = new Vector2(-36, 0);
+            label.SetText(text);
+
+            var toggle = rect.gameObject.AddComponent<Toggle>();
+            toggle.targetGraphic = box;
+            toggle.graphic = check;
+            toggle.SetIsOnWithoutNotify(isOn);
+            return toggle;
         }
 
         // position은 패널 위쪽 가운데 기준

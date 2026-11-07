@@ -24,8 +24,8 @@ namespace aisilol.Game
         private const float AuraRadiusPerLevel = 0.35f;     // 레벨당 범위 증가(m)
         private const float AuraBaseTickInterval = 0.5f;    // 1레벨 틱 간격(초)
         private const float AuraTickRateGrowth = 0.15f;     // 레벨당 초당 틱 수 15% 증가
-        private const float AuraBaseDamageRatio = 0.5f;     // 1레벨 틱당 피해 = Damage * 비율
-        private const float AuraDamageRatioPerLevel = 0.1f; // 레벨당 틱당 피해 비율 증가
+        private const float AuraBaseDamageRatio = 0.1f;     // 1레벨 틱당 피해 = Damage * 비율
+        private const float AuraDamageRatioPerLevel = 0.005f; // 레벨당 틱당 피해 비율 증가
         private const float AuraPulseDuration = 0.15f;      // 틱마다 오라가 밝아지는 시간(초)
         private const float OrbitRadius = 1.6f;         // 칼날이 도는 반경(m)
         private const float OrbitSpeed = 3;             // rad/s

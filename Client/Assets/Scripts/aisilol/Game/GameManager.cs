@@ -55,6 +55,10 @@ namespace aisilol.Game
         [SerializeField]
         public float potionHeal = 30;
 
+        [SetInspectorName("강화 자동 선택 (레벨업 시 멈추지 않고 선택지 중 하나를 바로 적용)")]
+        [SerializeField]
+        public bool autoSelectUpgrade;
+
         [SetInspectorName("강화 목록")]
         [SerializeField]
         public UpgradeDefinition[] upgrades;
@@ -69,10 +73,15 @@ namespace aisilol.Game
         [SerializeField]
         public float spawnPerSecondGrowth = 1.3f;
 
-        // 플레이어 레벨에 비례해 증가. 체력 배율 = 1 + 증가량 * (레벨 - 1). 기본값이면 100레벨에서 약 25배(체력 2 → 약 50)
+        // 시작 레벨까지는 1배, 이후 레벨에 비례해 증가. 체력 배율 = 1 + 증가량 * (레벨 - 시작 레벨)
+        // 기본값이면 100레벨에서 약 25배(체력 2 → 약 50)
+        [SetInspectorName("Enemy 체력 증가 시작 레벨")]
+        [SerializeField]
+        public int enemyHealthStartLevel = 30;
+
         [SetInspectorName("레벨당 Enemy 체력 배율 증가량")]
         [SerializeField]
-        public float enemyHealthGrowthPerLevel = 0.24f;
+        public float enemyHealthGrowthPerLevel = 0.34f;
 
         [SetInspectorName("시야 밖 렌더링 제외(컬링)")]
         [SerializeField]
@@ -138,6 +147,15 @@ namespace aisilol.Game
 
             var activeScene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(activeScene.name);
+        }
+
+        // 켜면 이후 레벨업은 멈추지 않고 자동 선택. 선택지가 열려 있으면 바로 선택
+        public void SetAutoSelectUpgrade(bool value)
+        {
+            autoSelectUpgrade = value;
+
+            if (value && State == GameState.LevelUp)
+                SelectUpgrade(0);
         }
 
         // 레벨업 선택지 중 index번째 강화 적용
@@ -233,7 +251,7 @@ namespace aisilol.Game
             Health = stats.Get(StatType.MaxHealth);
 
             if (uiText && uiText.canvas)
-                _hud = new GameHud(uiText.canvas, ChoiceCount, SelectUpgrade, OnClick_Restart);
+                _hud = new GameHud(uiText.canvas, ChoiceCount, SelectUpgrade, OnClick_Restart, autoSelectUpgrade, SetAutoSelectUpgrade);
 
             SetState(GameState.Playing);
         }
@@ -327,19 +345,30 @@ namespace aisilol.Game
                 SelectUpgrade(2);
         }
 
+        // 자동 선택이면 멈추지 않고 무작위 선택지의 첫 번째를 남은 레벨업 수만큼 적용
         private void OpenLevelUp()
         {
-            UpgradeSelector.Pick(upgrades, _stats, ChoiceCount, ref _random, _choices);
-
-            // 모든 강화가 최대 레벨이면 선택 없이 진행
-            if (_choices.Count == 0)
+            while (_pendingLevelUps > 0)
             {
-                _pendingLevelUps = 0;
-                return;
-            }
+                UpgradeSelector.Pick(upgrades, _stats, ChoiceCount, ref _random, _choices);
 
-            SetState(GameState.LevelUp);
-            _hud?.ShowLevelUp(_choices, _stats);
+                // 모든 강화가 최대 레벨이면 선택 없이 진행
+                if (_choices.Count == 0)
+                {
+                    _pendingLevelUps = 0;
+                    return;
+                }
+
+                if (!autoSelectUpgrade)
+                {
+                    SetState(GameState.LevelUp);
+                    _hud?.ShowLevelUp(_choices, _stats);
+                    return;
+                }
+
+                ApplyUpgrade(_choices[0]);
+                --_pendingLevelUps;
+            }
         }
 
         // 최대 체력이 늘어난 만큼 현재 체력도 회복
@@ -357,10 +386,10 @@ namespace aisilol.Game
             return spawnPerSecondBase * Mathf.Pow(spawnPerSecondGrowth, Mathf.Max(0, level - 1));
         }
 
-        // 1레벨은 1배. 증가량이 음수여도 1배 아래로 내려가지 않음
+        // 시작 레벨 이하는 1배. 증가량이 음수여도 1배 아래로 내려가지 않음
         public float CalcEnemyHealthMultiplier(int level)
         {
-            return Mathf.Max(1, 1 + enemyHealthGrowthPerLevel * Mathf.Max(0, level - 1));
+            return Mathf.Max(1, 1 + enemyHealthGrowthPerLevel * Mathf.Max(0, level - enemyHealthStartLevel));
         }
 
         private void SetState(GameState state)
