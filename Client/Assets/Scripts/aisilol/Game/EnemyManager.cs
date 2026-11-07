@@ -90,7 +90,14 @@ namespace aisilol.Game
         internal JobHandle GridHandle => _gridHandle;
         internal float InverseCellSize => _inverseCellSize;
         internal float Radius => _radius;
-        internal Camera Camera => _gameCamera;
+        // 시야 판정에 사용할 카메라. 컬링을 끄면 null을 반환해 모든 Instance를 렌더링
+        internal Camera CullingCamera => UseCulling ? _gameCamera : null;
+
+        public bool UseCulling { get; set; } = true;
+
+        // 플레이어에서 Enemy가 생성되는 거리. 화면 모서리까지의 거리, 최대 200m
+        internal float SpawnDistance => _spawnEnemyDistance;
+        public int VisibleCount => _renderer?.VisibleCount ?? 0;
         internal NativeQueue<EnemyDamage>.ParallelWriter DamageWriter => _damageQueue.AsParallelWriter();
 
         // 다음 LateUpdate 전까지 유효. 드롭 생성에 사용
@@ -147,8 +154,6 @@ namespace aisilol.Game
             _player = player;
 
             _gameCamera = cameraComponent;
-            gameCamera.onZoomChanged += CalcSpawnEnemyDistance;
-
             _positions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
             _nextPositions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
             _speeds = new NativeList<float>(InitialCapacity, Allocator.Persistent);
@@ -244,7 +249,7 @@ namespace aisilol.Game
 
             ApplyDamages();
 
-            _renderer.Render(_matrices.AsArray(), _gameCamera);
+            _renderer.Render(_matrices.AsArray(), CullingCamera);
         }
 
         private void OnDestroy()
@@ -312,12 +317,12 @@ namespace aisilol.Game
 
         private void Spawn()
         {
-            // Spawn Distance가 아직 계산 전이면 Skip. 최대 거리로 제한된 경우에도 생성은 계속함
-            if (_spawnEnemyDistance <= 0)
-            {
-                CalcSpawnEnemyDistance();
+            // 첫 프레임은 Spawn 거리 계산만 수행
+            // 카메라 회전 / 줌 / 이동에 맞추도록 매 프레임 다시 계산. 첫 프레임에는 카메라가 아직 플레이어를 보지 않아 최대 거리가 나올 수 있음
+            var firstFrame = _spawnEnemyDistance <= 0;
+            CalcSpawnEnemyDistance();
+            if (firstFrame)
                 return;
-            }
 
             // 프레임 속도와 관계없이 초당 생성 수를 유지하도록 소수점 이하는 다음 프레임으로 이월
             // FPS가 기준 아래면 생성하지 않고, 밀린 생성 수도 쌓지 않음

@@ -117,6 +117,23 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator UseCulling_Off_RendersAllEnemies()
+        {
+            // 화면 밖에서 생성되므로 컬링을 켜면 렌더링 수가 전체보다 적고, 끄면 전체를 렌더링
+            _manager.SpawnPerSecond = 100000;
+            _manager.Initialize(_player, _gameCamera, _enemyPrefab);
+            yield return TestHelper.WaitFrames(3);
+
+            _manager.SpawnPerSecond = 0;
+            yield return null;
+            Assert.Less(_manager.VisibleCount, _manager.EnemyCount);
+
+            _manager.UseCulling = false;
+            yield return null;
+            Assert.AreEqual(_manager.EnemyCount, _manager.VisibleCount);
+        }
+
+        [UnityTest]
         public IEnumerator Update_InfiniteSpawnRate_SpawnsUpToFrameLimit()
         {
             // 높은 레벨에서 생성 수가 int 범위를 넘거나 무한대가 되어도 프레임당 상한만큼 계속 생성

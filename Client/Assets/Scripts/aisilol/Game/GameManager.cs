@@ -74,6 +74,10 @@ namespace aisilol.Game
         [SerializeField]
         public AnimationCurve enemyHealthMultiplier = new(new Keyframe(0, 1), new Keyframe(60, 1), new Keyframe(300, 4));
 
+        [SetInspectorName("시야 밖 렌더링 제외(컬링)")]
+        [SerializeField]
+        public bool useCulling = true;
+
         [SetInspectorName("프레임당 최대 생성 수")]
         [SerializeField]
         public int maxSpawnPerFrame = 100;
@@ -252,10 +256,11 @@ namespace aisilol.Game
             _enemyManager.SpawnPerSecond = CalcSpawnPerSecond(_experience.Level);
             _enemyManager.MinSpawnFps = minSpawnFps;
             _enemyManager.MaxSpawnPerFrame = maxSpawnPerFrame;
+            _enemyManager.UseCulling = useCulling;
             _enemyManager.HealthMultiplier = enemyHealthMultiplier.Evaluate(ElapsedTime);
 
             // 경험치는 Enemy 처치가 아니라 떨어진 경험치 Object를 획득해야 증가
-            _pendingLevelUps += _experience.Add(_pickups.TakeExperience());
+            GainExperience(_pickups.TakeExperience());
 
             var maxHealth = _stats.Get(StatType.MaxHealth);
             Health = Mathf.Min(maxHealth, Health + _pickups.TakeHealing());
@@ -279,6 +284,17 @@ namespace aisilol.Game
 
             if (_pendingLevelUps > 0)
                 OpenLevelUp();
+        }
+
+        // 레벨이 오르면 맵에 남은 경험치 Object를 모두 끌어옴
+        internal void GainExperience(int amount)
+        {
+            var levelUps = _experience.Add(amount);
+            if (levelUps <= 0)
+                return;
+
+            _pendingLevelUps += levelUps;
+            _pickups.AttractAllExperience();
         }
 
         private void UpdateLevelUpInput()
@@ -350,7 +366,7 @@ namespace aisilol.Game
                 return;
 
             var throttled = _enemyManager.IsSpawnThrottled ? " (spawn paused)" : "";
-            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0}{throttled}\nFPS : {CalcFPS():F1}\n" +
+            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0} (visible {_enemyManager.VisibleCount:N0}){throttled}\nFPS : {CalcFPS():F1}\n" +
                        $"Time : {FormatTime(ElapsedTime)}\nKills : {_enemyManager.KillCount:N0}";
             uiText.SetText(text);
         }

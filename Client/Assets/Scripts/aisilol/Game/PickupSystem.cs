@@ -57,6 +57,7 @@ namespace aisilol.Game
         private NativeReference<Unity.Mathematics.Random> _random;
         private JobHandle _jobHandle;
         private float _mergeTimer;
+        private bool _attractAllExperience;
 
         private int _collectedExperience;
         private float _collectedHealing;
@@ -67,6 +68,12 @@ namespace aisilol.Game
 
         // Enemy 1마리가 사망할 때 HP 포션이 나올 확률. GameManager가 플레이어 HP 비율에 따라 매 프레임 갱신
         public float PotionDropChance { get; set; }
+
+        // 다음 이동 Job에서 맵의 모든 경험치 Object를 자석에 걸린 상태로 만듦. 레벨업 시 호출. HP 포션은 대상 아님
+        public void AttractAllExperience()
+        {
+            _attractAllExperience = true;
+        }
 
         public void Initialize(GameObject player, EnemyManager enemies, GameObject experiencePrefab, GameObject potionPrefab, float potionHeal, PlayerStats stats)
         {
@@ -143,8 +150,9 @@ namespace aisilol.Game
             var magnetRange = Mathf.Max(_stats.Get(StatType.Magnet), CollectRadius);
             var deltaTime = Time.deltaTime;
 
-            var experienceHandle = ScheduleMove(_experience, _experienceMesh, playerPosition, magnetRange, deltaTime);
-            var potionHandle = ScheduleMove(_potions, _potionMesh, playerPosition, magnetRange, deltaTime);
+            var experienceHandle = ScheduleMove(_experience, _experienceMesh, playerPosition, magnetRange, deltaTime, _attractAllExperience);
+            var potionHandle = ScheduleMove(_potions, _potionMesh, playerPosition, magnetRange, deltaTime, false);
+            _attractAllExperience = false;
             _jobHandle = JobHandle.CombineDependencies(experienceHandle, potionHandle);
         }
 
@@ -170,7 +178,7 @@ namespace aisilol.Game
             ExperienceObjectCount = _experience.positions.Length;
             PotionCount = _potions.positions.Length;
 
-            var camera = _enemies ? _enemies.Camera : null;
+            var camera = _enemies ? _enemies.CullingCamera : null;
             _experienceRenderer.Render(_experience.matrices.AsArray(), _experience.tiers.AsArray(), camera);
             _potionRenderer.Render(_potions.matrices.AsArray(), camera);
         }
@@ -204,7 +212,7 @@ namespace aisilol.Game
             _tierMaterials = null;
         }
 
-        private static JobHandle ScheduleMove(PickupData data, InstancedMesh mesh, float2 player, float magnetRange, float deltaTime)
+        private static JobHandle ScheduleMove(PickupData data, InstancedMesh mesh, float2 player, float magnetRange, float deltaTime, bool attractAll)
         {
             return new MoveJob
             {
@@ -215,6 +223,7 @@ namespace aisilol.Game
                 matrices = data.matrices.AsArray(),
                 player = player,
                 magnetRange = magnetRange,
+                attractAll = attractAll,
                 collectRadius = CollectRadius,
                 deltaTime = deltaTime,
                 rotation = mesh.Rotation,
@@ -344,6 +353,7 @@ namespace aisilol.Game
             [WriteOnly] public NativeArray<Matrix4x4> matrices;
             public float2 player;
             public float magnetRange;
+            public bool attractAll;     // true면 거리와 관계없이 모두 끌어옴
             public float collectRadius;
             public float deltaTime;
             public quaternion rotation;
@@ -355,7 +365,7 @@ namespace aisilol.Game
                 var offset = player - position.xz;
                 var distance = math.length(offset);
 
-                if (attracted[index] == 0 && distance <= magnetRange)
+                if (attracted[index] == 0 && (attractAll || distance <= magnetRange))
                     attracted[index] = 1;
 
                 if (attracted[index] != 0 && distance > 0)

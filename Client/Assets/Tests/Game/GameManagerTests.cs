@@ -203,6 +203,31 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator LevelUp_AttractsAllExperienceObjects()
+        {
+            // 자석 범위가 작아 처치한 자리의 경험치 Object가 남아 있다가, 레벨업하면 모두 끌려와 획득
+            _gameManager.playerPrefab.GetComponent<PlayerController>().magnetRange = 0.1f;
+            _gameManager.gameObject.SetActive(true);
+            yield return KillEnemies(5);
+            yield return TestHelper.WaitFrames(3);
+
+            Assert.Greater(Pickups.ExperienceObjectCount, 0);
+            Assert.AreEqual(0, _gameManager.Experience.Current);
+
+            // 레벨업 선택은 다음 Update에서 열림
+            _gameManager.GainExperience(10);
+            yield return TestHelper.WaitUntil(() => _gameManager.State == GameManager.GameState.LevelUp);
+            Assert.AreEqual(GameManager.GameState.LevelUp, _gameManager.State);
+            _gameManager.SelectUpgrade(0);
+
+            yield return TestHelper.WaitUntil(() => Pickups.ExperienceObjectCount == 0);
+
+            Assert.AreEqual(0, Pickups.ExperienceObjectCount);
+            Assert.AreEqual(2, _gameManager.Experience.Level);
+            Assert.GreaterOrEqual(_gameManager.Experience.Current, 5);
+        }
+
+        [UnityTest]
         public IEnumerator Potion_HealsUpToMaxHealth()
         {
             _gameManager.potionDropChance = AnimationCurve.Constant(0, 1, 1);

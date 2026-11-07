@@ -112,6 +112,33 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator AttractAllExperience_CollectsEveryExperienceObject()
+        {
+            // 자석 범위 밖에 떨어진 경험치 Object도 모두 끌려와 획득. HP 포션은 그대로 남음
+            _stats.SetBase(StatType.Magnet, 0.1f);
+            Initialize();
+            _pickups.PotionDropChance = 1;
+            yield return KillEnemies(5);
+            yield return TestHelper.WaitFrames(3);
+
+            var kills = _enemies.KillCount;
+            Assert.Greater(_pickups.ExperienceObjectCount, 0);
+            Assert.AreEqual(0, _pickups.TakeExperience());
+
+            _pickups.AttractAllExperience();
+
+            var experience = 0;
+            yield return TestHelper.WaitUntil(() =>
+            {
+                experience += _pickups.TakeExperience();
+                return _pickups.ExperienceObjectCount == 0;
+            });
+
+            Assert.AreEqual(kills, experience);
+            Assert.AreEqual(kills, _pickups.PotionCount);
+        }
+
+        [UnityTest]
         public IEnumerator Merge_TenNearbyBecomeOne()
         {
             // 자석 범위는 획득 거리(0.1m)뿐. Enemy가 플레이어 주변에 모인 뒤 처치하면 드롭이 좁은 영역에 쌓임
@@ -225,6 +252,36 @@ namespace aisilol.Tests.Game
             // 5m: 자석 범위 밖이라 그대로
             Assert.AreEqual(0, attracted[2]);
             Assert.AreEqual(5, positions[2].x);
+        }
+
+        [Test]
+        public void MoveJob_AttractAll_AttractsOutsideMagnet()
+        {
+            using var positions = new NativeArray<float3>(new[] { new float3(50, 0, 0) }, Allocator.TempJob);
+            using var tiers = new NativeArray<int>(1, Allocator.TempJob);
+            using var attracted = new NativeArray<byte>(1, Allocator.TempJob);
+            using var collected = new NativeArray<byte>(1, Allocator.TempJob);
+            using var matrices = new NativeArray<Matrix4x4>(1, Allocator.TempJob);
+
+            new PickupSystem.MoveJob
+            {
+                positions = positions,
+                tiers = tiers,
+                attracted = attracted,
+                collected = collected,
+                matrices = matrices,
+                player = float2.zero,
+                magnetRange = 1,
+                attractAll = true,
+                collectRadius = 0.1f,
+                deltaTime = 0.01f,
+                rotation = quaternion.identity,
+                scale = new float3(1),
+            }.Run(1);
+
+            // 50m: (3 + 50 * 4) * 0.01 = 2.03 이동
+            Assert.AreEqual(1, attracted[0]);
+            Assert.AreEqual(47.97f, positions[0].x, 1e-3f);
         }
 
         [Test]
