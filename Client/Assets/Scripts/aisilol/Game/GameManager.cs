@@ -105,7 +105,7 @@ namespace aisilol.Game
 
         private readonly Experience _experience = new();
         private readonly List<UpgradeDefinition> _choices = new();
-        private readonly System.Random _random = new();
+        private Unity.Mathematics.Random _random = new((uint)System.Environment.TickCount | 1);
 
         private float _invincibleTimer;
         private int _pendingLevelUps;
@@ -313,7 +313,7 @@ namespace aisilol.Game
 
         private void OpenLevelUp()
         {
-            UpgradeSelector.Pick(upgrades, _stats, ChoiceCount, _random, _choices);
+            UpgradeSelector.Pick(upgrades, _stats, ChoiceCount, ref _random, _choices);
 
             // 모든 강화가 최대 레벨이면 선택 없이 진행
             if (_choices.Count == 0)

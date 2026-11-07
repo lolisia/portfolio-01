@@ -5,7 +5,7 @@ namespace aisilol.Game
     public static class UpgradeSelector
     {
         // 최대 레벨에 도달하지 않은 강화 중 서로 다른 것을 최대 count개 무작위로 선택
-        public static void Pick(IReadOnlyList<UpgradeDefinition> pool, PlayerStats stats, int count, System.Random random, List<UpgradeDefinition> result)
+        public static void Pick(IReadOnlyList<UpgradeDefinition> pool, PlayerStats stats, int count, ref Unity.Mathematics.Random random, List<UpgradeDefinition> result)
         {
             result.Clear();
 
@@ -22,7 +22,7 @@ namespace aisilol.Game
             var pickCount = System.Math.Min(count, result.Count);
             for (var index = 0; index < pickCount; index++)
             {
-                var swap = random.Next(index, result.Count);
+                var swap = random.NextInt(index, result.Count);
                 (result[index], result[swap]) = (result[swap], result[index]);
             }
 
