@@ -120,17 +120,42 @@ namespace aisilol.Tests.Game
         public IEnumerator UseCulling_Off_RendersAllEnemies()
         {
             // 화면 밖에서 생성되므로 컬링을 켜면 렌더링 수가 전체보다 적고, 끄면 전체를 렌더링
+            _manager.UseGpuRendering = false;
             _manager.SpawnPerSecond = 100000;
             _manager.Initialize(_player, _gameCamera, _enemyPrefab);
             yield return TestHelper.WaitFrames(3);
 
             _manager.SpawnPerSecond = 0;
             yield return null;
+            Assert.IsFalse(_manager.IsGpuRendering);
             Assert.Less(_manager.VisibleCount, _manager.EnemyCount);
 
             _manager.UseCulling = false;
             yield return null;
             Assert.AreEqual(_manager.EnemyCount, _manager.VisibleCount);
+        }
+
+        [UnityTest]
+        public IEnumerator UseGpuRendering_CullsOnGpuAndReadsBackVisibleCount()
+        {
+            if (!GpuInstanceRenderer.IsSupported)
+                Assert.Ignore("Compute Shader를 지원하지 않는 환경");
+
+            _manager.SpawnPerSecond = 100000;
+            _manager.Initialize(_player, _gameCamera, _enemyPrefab);
+            yield return TestHelper.WaitFrames(3);
+
+            _manager.SpawnPerSecond = 0;
+            Assert.IsTrue(_manager.IsGpuRendering);
+
+            // 보이는 수는 GPU에서 몇 프레임 늦게 읽어옴
+            _manager.UseCulling = false;
+            yield return TestHelper.WaitUntil(() => _manager.VisibleCount == _manager.EnemyCount);
+            Assert.AreEqual(_manager.EnemyCount, _manager.VisibleCount);
+
+            _manager.UseCulling = true;
+            yield return TestHelper.WaitUntil(() => _manager.VisibleCount < _manager.EnemyCount);
+            Assert.Less(_manager.VisibleCount, _manager.EnemyCount);
         }
 
         [UnityTest]

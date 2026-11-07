@@ -78,6 +78,14 @@ namespace aisilol.Game
         [SerializeField]
         public bool useCulling = true;
 
+        [SetInspectorName("GPU 렌더링 (Compute Shader 컬링 + RenderMeshIndirect)")]
+        [SerializeField]
+        public bool useGpuRendering = true;
+
+        [SetInspectorName("경험치 Object 최대 수 (넘으면 넓은 범위로 병합)")]
+        [SerializeField]
+        public int maxExperienceObjects = 5000;
+
         [SetInspectorName("프레임당 최대 생성 수")]
         [SerializeField]
         public int maxSpawnPerFrame = 100;
@@ -100,6 +108,7 @@ namespace aisilol.Game
 
         private EnemyManager _enemyManager;
         private PickupSystem _pickups;
+        private WeaponSystem _weapons;
         private PlayerStats _stats;
         private GameHud _hud;
 
@@ -121,6 +130,7 @@ namespace aisilol.Game
         public Experience Experience => _experience;
         public IReadOnlyList<UpgradeDefinition> Choices => _choices;
         internal GameHud Hud => _hud;
+        internal WeaponSystem Weapons => _weapons;
 
         public void OnClick_Restart()
         {
@@ -211,6 +221,10 @@ namespace aisilol.Game
             var projectileSystem = gameObject.AddComponent<ProjectileSystem>();
             projectileSystem.Initialize(player, _enemyManager, projectilePrefab, stats);
 
+            // 투사체 외 무기 초기화. 칼날은 투사체 Mesh 사용
+            _weapons = gameObject.AddComponent<WeaponSystem>();
+            _weapons.Initialize(player, _enemyManager, projectilePrefab, stats);
+
             // 드롭 초기화
             _pickups = gameObject.AddComponent<PickupSystem>();
             _pickups.Initialize(player, _enemyManager, experiencePrefab, potionPrefab, potionHeal, stats);
@@ -257,6 +271,8 @@ namespace aisilol.Game
             _enemyManager.MinSpawnFps = minSpawnFps;
             _enemyManager.MaxSpawnPerFrame = maxSpawnPerFrame;
             _enemyManager.UseCulling = useCulling;
+            _enemyManager.UseGpuRendering = useGpuRendering;
+            _pickups.MaxExperienceObjects = maxExperienceObjects;
             _enemyManager.HealthMultiplier = enemyHealthMultiplier.Evaluate(ElapsedTime);
 
             // 경험치는 Enemy 처치가 아니라 떨어진 경험치 Object를 획득해야 증가
@@ -366,7 +382,8 @@ namespace aisilol.Game
                 return;
 
             var throttled = _enemyManager.IsSpawnThrottled ? " (spawn paused)" : "";
-            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0} (visible {_enemyManager.VisibleCount:N0}){throttled}\nFPS : {CalcFPS():F1}\n" +
+            var renderer = _enemyManager.IsGpuRendering ? "GPU indirect" : "CPU instanced";
+            var text = $"Enemy Count: {_enemyManager.EnemyCount:N0} (visible {_enemyManager.VisibleCount:N0}){throttled}\nFPS : {CalcFPS():F1}\nRenderer : {renderer}\n" +
                        $"Time : {FormatTime(ElapsedTime)}\nKills : {_enemyManager.KillCount:N0}";
             uiText.SetText(text);
         }

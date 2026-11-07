@@ -17,6 +17,8 @@ namespace aisilol.Game
         public Vector3 Size { get; }    // Scale이 적용된 Mesh 크기
         public float BoundsRadius { get; }  // Scale 1 기준, 원점에서 Mesh 전체를 감싸는 구의 반지름. 시야 판정에 사용
         public Material Material => _renderParams.material;
+        public Mesh Mesh => _mesh;
+        public RenderParams RenderParams => _renderParams;
 
         private InstancedMesh(Mesh mesh, RenderParams renderParams, Transform transform)
         {

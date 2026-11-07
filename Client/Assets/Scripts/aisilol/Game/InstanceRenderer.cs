@@ -8,7 +8,8 @@ using UnityEngine;
 namespace aisilol.Game
 {
     // 카메라 시야 밖의 Instance를 제외하고 그룹별로 렌더링. 그룹마다 다른 InstancedMesh(Material)를 사용할 수 있음
-    // 시야 판정은 IJobParallelFor, 그룹별로 모으는 작업은 IJob으로 처리
+    // UseGpu가 켜져 있고 지원되면 GpuInstanceRenderer(Compute Shader 컬링 + RenderMeshIndirect)로 렌더링
+    // 그 외에는 CPU 경로. 시야 판정은 IJobParallelFor, 그룹별로 모으는 작업은 IJob으로 처리한 뒤 RenderMeshInstanced
     internal sealed class InstanceRenderer : IDisposable
     {
         private const int JobBatchCount = 256;
@@ -22,12 +23,25 @@ namespace aisilol.Game
         private NativeArray<int> _groupStarts;
         private NativeArray<int> _groupCounts;
         private NativeArray<int> _noGroups;     // 그룹을 지정하지 않을 때 Job에 넘기는 빈 배열
+        private readonly VertexAnimation _animation;
+        private GpuInstanceRenderer _gpu;
+        private bool _gpuCreateFailed;
 
         public int VisibleCount { get; private set; }
 
+        // 켜면 다음 Render부터 GPU 경로 사용. 처음 켤 때 GPU 자원을 만들고, 지원하지 않으면 CPU 경로 유지
+        public bool UseGpu { get; set; }
+        public bool IsGpuActive => UseGpu && TryGetGpu(out _);
+
         public InstanceRenderer(params InstancedMesh[] meshes)
+            : this(default, meshes)
+        {
+        }
+
+        public InstanceRenderer(VertexAnimation animation, params InstancedMesh[] meshes)
         {
             _meshes = meshes;
+            _animation = animation;
             _frustum = new NativeArray<float4>(6, Allocator.Persistent);
             _visible = new NativeList<byte>(Allocator.Persistent);
             _visibleMatrices = new NativeList<Matrix4x4>(Allocator.Persistent);
@@ -39,6 +53,13 @@ namespace aisilol.Game
         // groups는 Instance별 그룹 인덱스. 비어 있으면 모두 0번 그룹. camera가 없으면 시야 판정 없이 모두 렌더링
         public void Render(NativeArray<Matrix4x4> matrices, NativeArray<int> groups, Camera camera)
         {
+            if (UseGpu && TryGetGpu(out var gpu))
+            {
+                gpu.Render(matrices, groups, camera);
+                VisibleCount = gpu.VisibleCount;
+                return;
+            }
+
             var count = matrices.Length;
             VisibleCount = 0;
 
@@ -92,8 +113,20 @@ namespace aisilol.Game
             Render(matrices, default, camera);
         }
 
+        private bool TryGetGpu(out GpuInstanceRenderer gpu)
+        {
+            if (_gpu == null && !_gpuCreateFailed)
+                _gpuCreateFailed = !GpuInstanceRenderer.TryCreate(_meshes, _animation, out _gpu);
+
+            gpu = _gpu;
+            return gpu != null;
+        }
+
         public void Dispose()
         {
+            _gpu?.Dispose();
+            _gpu = null;
+
             if (_frustum.IsCreated)
                 _frustum.Dispose();
 

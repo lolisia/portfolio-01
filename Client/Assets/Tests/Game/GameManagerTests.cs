@@ -83,12 +83,27 @@ namespace aisilol.Tests.Game
             Assert.IsNotNull(_gameManager.GetComponent<FloorManager>());
             Assert.IsNotNull(_gameManager.GetComponent<ProjectileSystem>());
             Assert.IsNotNull(_gameManager.GetComponent<PickupSystem>());
+            Assert.IsNotNull(_gameManager.GetComponent<WeaponSystem>());
+            Assert.AreSame(_gameManager.GetComponent<WeaponSystem>(), _gameManager.Weapons);
             Assert.AreEqual(GameManager.GameState.Playing, _gameManager.State);
             Assert.AreEqual(100, _gameManager.Health);
             Assert.Greater(_gameManager.transform.childCount, 0);
             Assert.Greater(_gameManager.GetComponent<EnemyManager>().EnemyCount, 0);
 
             StringAssert.StartsWith("Enemy Count: ", _gameManager.uiText.text);
+            var renderer = GpuInstanceRenderer.IsSupported ? "Renderer : GPU indirect" : "Renderer : CPU instanced";
+            StringAssert.Contains(renderer, _gameManager.uiText.text);
+        }
+
+        [UnityTest]
+        public IEnumerator UseGpuRenderingOff_ShowsCpuRenderer()
+        {
+            _gameManager.useGpuRendering = false;
+            _gameManager.gameObject.SetActive(true);
+            yield return TestHelper.WaitFrames(3);
+
+            Assert.IsFalse(_gameManager.GetComponent<EnemyManager>().IsGpuRendering);
+            StringAssert.Contains("Renderer : CPU instanced", _gameManager.uiText.text);
         }
 
         [UnityTest]

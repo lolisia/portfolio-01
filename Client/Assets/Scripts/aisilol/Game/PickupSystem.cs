@@ -22,6 +22,9 @@ namespace aisilol.Game
         private const float MergeCellSize = 0.5f;       // 0단계 병합 범위. 같은 셀 안에 있으면 "가까운" 것으로 판정
         private const float MergeCellGrowth = 3;        // 단계가 오를수록 수가 적어지므로 병합 범위를 단계마다 3배씩 넓힘
         private const float MergeInterval = 0.2f;       // 병합 검사 주기(초)
+        private const int WideMergePasses = 4;          // 상한을 넘었을 때 병합 범위를 넓혀 다시 병합하는 횟수
+        private const float WideMergeCellGrowth = 4;    // 다시 병합할 때마다 병합 범위를 4배씩 넓힘
+        private const int GlobalMergePasses = 4;        // 그래도 넘으면 셀 구분 없이 같은 단계끼리 병합하는 횟수. 1회에 1단계씩 오름
         private const float CollectRadius = 0.1f;       // 플레이어 중심에서 이 거리 안이면 획득
         private const float PullSpeed = 3;              // 자석으로 끌려올 때 기본 속도(m/s)
         private const float PullAcceleration = 4;       // 멀수록 빠르게. 거리(m)당 추가 속도
@@ -37,6 +40,9 @@ namespace aisilol.Game
             new(1f, 0.2f, 0.9f),    // 10,000
             new(1f, 1f, 1f),        // 100,000 이상
         };
+
+        // GPU 렌더링 시 제자리에서 회전하며 위아래로 움직임
+        private static readonly VertexAnimation PickupAnimation = new() { speed = 3, hop = 0.08f, spin = 2 };
 
         // Burst Job에서 static readonly 배열을 읽지 않도록 상수로 유지. TierColors 길이 - 1
         internal const int MaxVisualTier = 5;
@@ -68,6 +74,10 @@ namespace aisilol.Game
 
         // Enemy 1마리가 사망할 때 HP 포션이 나올 확률. GameManager가 플레이어 HP 비율에 따라 매 프레임 갱신
         public float PotionDropChance { get; set; }
+
+        // 경험치 Object 수 상한. 넘으면 병합 범위를 넓혀 멀리 떨어진 Object끼리도 병합. 가치는 그대로 유지
+        // 10개 미만으로 남은 단계는 병합할 수 없고 끌려오는 중인 Object도 병합하지 않으므로, 단계마다 9개까지 상한을 넘을 수 있음
+        public int MaxExperienceObjects { get; set; } = 5000;
 
         // 다음 이동 Job에서 맵의 모든 경험치 Object를 자석에 걸린 상태로 만듦. 레벨업 시 호출. HP 포션은 대상 아님
         public void AttractAllExperience()
@@ -117,8 +127,8 @@ namespace aisilol.Game
                 tierMeshes[tier] = experienceMesh.WithMaterial(material);
             }
 
-            _experienceRenderer = new InstanceRenderer(tierMeshes);
-            _potionRenderer = new InstanceRenderer(potionMesh);
+            _experienceRenderer = new InstanceRenderer(PickupAnimation, tierMeshes);
+            _potionRenderer = new InstanceRenderer(PickupAnimation, potionMesh);
 
             _experience = new PickupData(InitialCapacity);
             _potions = new PickupData(InitialCapacity);
@@ -179,6 +189,7 @@ namespace aisilol.Game
             PotionCount = _potions.positions.Length;
 
             var camera = _enemies ? _enemies.CullingCamera : null;
+            _experienceRenderer.UseGpu = _potionRenderer.UseGpu = _enemies && _enemies.UseGpuRendering;
             _experienceRenderer.Render(_experience.matrices.AsArray(), _experience.tiers.AsArray(), camera);
             _potionRenderer.Render(_potions.matrices.AsArray(), camera);
         }
@@ -264,21 +275,31 @@ namespace aisilol.Game
             if (_experience.positions.Length < MergeCount)
                 return;
 
-            new MergeJob
+            // 원점이 셀 경계라 범위를 넓혀도 사분면끼리는 병합되지 않으므로, 마지막에는 셀 크기를 무한대로 두어 위치와 관계없이 병합
+            var cellSize = MergeCellSize;
+            for (var pass = 0; pass <= WideMergePasses + GlobalMergePasses; pass++)
             {
-                positions = _experience.positions.AsArray(),
-                values = _experience.values.AsArray(),
-                tiers = _experience.tiers.AsArray(),
-                attracted = _experience.attracted.AsArray(),
-                matrices = _experience.matrices.AsArray(),
-                cellSize = MergeCellSize,
-                cellGrowth = MergeCellGrowth,
-                rotation = _experienceMesh.Rotation,
-                scale = _experienceMesh.Scale,
-            }.Run();
+                new MergeJob
+                {
+                    positions = _experience.positions.AsArray(),
+                    values = _experience.values.AsArray(),
+                    tiers = _experience.tiers.AsArray(),
+                    attracted = _experience.attracted.AsArray(),
+                    matrices = _experience.matrices.AsArray(),
+                    cellSize = cellSize,
+                    cellGrowth = MergeCellGrowth,
+                    rotation = _experienceMesh.Rotation,
+                    scale = _experienceMesh.Scale,
+                }.Run();
 
-            // 병합으로 가치가 0이 된 Object 제거. 같은 프레임에 렌더링되지 않도록 바로 정리
-            RemoveCollected(_experience);
+                // 병합으로 가치가 0이 된 Object 제거. 같은 프레임에 렌더링되지 않도록 바로 정리
+                RemoveCollected(_experience);
+
+                if (_experience.positions.Length <= MaxExperienceObjects)
+                    return;
+
+                cellSize = pass < WideMergePasses ? cellSize * WideMergeCellGrowth : float.PositiveInfinity;
+            }
         }
 
         internal static float4x4 CalcMatrix(float3 position, int tier, quaternion rotation, float3 scale)

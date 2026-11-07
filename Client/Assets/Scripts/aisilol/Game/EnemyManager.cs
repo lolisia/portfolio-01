@@ -41,6 +41,9 @@ namespace aisilol.Game
         private float _stopDistance;
         private float _inverseCellSize;
 
+        // GPU 렌더링 시 걷는 것처럼 튀어 오르며 찌그러짐
+        private static readonly VertexAnimation EnemyAnimation = new() { speed = 12, hop = 0.12f, squash = 0.12f };
+
         private static readonly Vector3[] ViewportCorners = { new(0, 0, 0), new(1, 0, 0), new(0, 1, 0), new(1, 1, 0), };
 
         // 이동 Job은 _positions(이번 프레임 시작 위치)를 읽고 _nextPositions에 기록. 이웃 위치를 읽는 동안 덮어쓰지 않기 위한 이중 버퍼
@@ -58,6 +61,7 @@ namespace aisilol.Game
 
         private JobHandle _gridHandle;
         private JobHandle _jobHandle;   // 이 시스템과 외부 시스템이 이번 프레임에 예약한 Job 전체
+        private JobHandle _damageHandle;    // 이번 프레임에 데미지 큐에 기록하는 Job. 동시에 기록하지 않도록 순서대로 연결
 
         private float _spawnEnemyDistance;
         private float _spawnAccumulator;
@@ -95,10 +99,17 @@ namespace aisilol.Game
 
         public bool UseCulling { get; set; } = true;
 
+        // GPU 렌더링(Compute Shader 컬링 + RenderMeshIndirect). 투사체 / 드롭도 같은 설정을 따름. 지원하지 않으면 CPU 경로
+        public bool UseGpuRendering { get; set; } = true;
+        public bool IsGpuRendering => _renderer != null && _renderer.IsGpuActive;
+
         // 플레이어에서 Enemy가 생성되는 거리. 화면 모서리까지의 거리, 최대 200m
         internal float SpawnDistance => _spawnEnemyDistance;
         public int VisibleCount => _renderer?.VisibleCount ?? 0;
         internal NativeQueue<EnemyDamage>.ParallelWriter DamageWriter => _damageQueue.AsParallelWriter();
+
+        // DamageWriter를 쓰는 Job은 이 핸들 뒤에 예약하고 AddDamageWriter로 등록. 격자 구성 Job도 포함
+        internal JobHandle DamageDependency => JobHandle.CombineDependencies(_gridHandle, _damageHandle);
 
         // 다음 LateUpdate 전까지 유효. 드롭 생성에 사용
         internal NativeArray<float3> DeathPositions => _deathPositions.AsArray();
@@ -164,7 +175,7 @@ namespace aisilol.Game
             _contactCount = new NativeReference<int>(Allocator.Persistent);
             _deathPositions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
             _killCount = new NativeReference<int>(Allocator.Persistent);
-            _renderer = new InstanceRenderer(_mesh);
+            _renderer = new InstanceRenderer(EnemyAnimation, _mesh);
         }
 
         // 메인 스레드에서 데미지 예약. LateUpdate에서 Job이 기록한 데미지와 함께 적용
@@ -177,6 +188,13 @@ namespace aisilol.Game
         internal void AddDependency(JobHandle handle)
         {
             _jobHandle = JobHandle.CombineDependencies(_jobHandle, handle);
+        }
+
+        // DamageDependency 뒤에 예약한 데미지 기록 Job. 다음 기록 Job은 이 Job 뒤에 실행
+        internal void AddDamageWriter(JobHandle handle)
+        {
+            _damageHandle = handle;
+            AddDependency(handle);
         }
 
         private void Update()
@@ -236,6 +254,7 @@ namespace aisilol.Game
         {
             _jobHandle.Complete();
             _jobHandle = default;
+            _damageHandle = default;
 
             if (!_positions.IsCreated)
                 return;
@@ -249,6 +268,7 @@ namespace aisilol.Game
 
             ApplyDamages();
 
+            _renderer.UseGpu = UseGpuRendering;
             _renderer.Render(_matrices.AsArray(), CullingCamera);
         }
 
