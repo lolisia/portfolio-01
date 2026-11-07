@@ -23,7 +23,7 @@
 - 이동은 위치 이중 버퍼. 이웃 위치를 읽는 동안 덮어쓰지 않음
 - Update에서 Job 예약, LateUpdate에서 완료 후 데미지 적용 / 사망 제거(swap-back)를 Burst `IJob`으로 처리
 - 렌더링은 아래 렌더링 항목 참고
-- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 레벨에 따라 지수 증가(기본값 * 증가율^(레벨 - 1)), 체력은 플레이어 레벨에 비례해 증가(배율 = 1 + 0.24 * (레벨 - 1), 100레벨에서 약 50)
+- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 레벨에 따라 지수 증가(기본값 * 증가율^(레벨 - 1)), 체력은 30레벨까지 그대로, 이후 레벨에 비례해 증가(배율 = 1 + 0.34 * (레벨 - 30), 100레벨에서 약 50)
 - Enemy 수는 고정 상한 없음. 평균 FPS(0.5초 지수 이동 평균)가 기준(기본 60) 아래면 생성 중지
 - 한 프레임 생성 수는 상한(기본 100)까지. 넘는 수는 이월하지 않음
 - 피격된 Enemy는 0.1초 동안 피격 색으로 표시. 같은 Mesh에 피격 색 Material을 쓰는 렌더링 그룹으로 분리
@@ -43,7 +43,7 @@
 - 맞힌 Enemy는 `NativeQueue` 데미지 큐에 기록하고, EnemyManager가 LateUpdate에서 일괄 적용. 데미지를 기록하는 Job끼리는 순서대로 연결
 
 **무기** ([WeaponSystem.cs](Client/Assets/Scripts/aisilol/Game/WeaponSystem.cs))
-- 오라: 틱마다 플레이어 주변 반경 안의 Enemy에 피해. 레벨당 범위 +0.35m(1레벨 1.5m), 초당 틱 수 +15%(1레벨 0.5초 간격), 틱당 피해 +10%p(1레벨 Damage의 50%)
+- 오라: 틱마다 플레이어 주변 반경 안의 Enemy에 피해. 레벨당 범위 +0.35m(1레벨 1.5m), 초당 틱 수 +15%(1레벨 0.5초 간격), 틱당 피해 +0.5%p(1레벨 Damage의 10%)
 - 칼날: 플레이어 주위를 도는 칼날에 닿은 Enemy에 초당 피해. 칼날마다 `IJobParallelFor`
 - 연쇄 번개: 1초마다 가까운 Enemy를 맞히고, 맞히지 않은 가장 가까운 Enemy로 이어서 튐
 - 모두 Enemy 격자를 검색하는 Burst Job. 강화(Aura / Orbit / Chain)로 획득
@@ -59,7 +59,7 @@
 - 드롭 생성 / 획득 / 제거는 Burst `IJob`
 
 **성장** ([PlayerStats.cs](Client/Assets/Scripts/aisilol/Game/PlayerStats.cs), [UpgradeDefinition.cs](Client/Assets/Scripts/aisilol/Game/UpgradeDefinition.cs))
-- 레벨업 시 일시 정지 후 강화 3택 1
+- 레벨업 시 일시 정지 후 강화 3택 1. HUD의 Auto Upgrade 체크박스를 켜면 멈추지 않고 무작위 선택지 중 하나를 바로 적용
 - 강화는 ScriptableObject 에셋([Data/Upgrades](Client/Assets/Data/Upgrades)). 능력치 / 적용 방식(Add, Percent) / 값 / 최대 레벨만 입력
 - 능력치 = (기본값 + Add 합) * (1 + Percent 합)
 
@@ -89,7 +89,7 @@ flowchart LR
 
 ## 테스트 / CI
 
-- PlayMode 테스트 190개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
+- PlayMode 테스트 193개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
 - push / PR 시 테스트 + 커버리지 + SonarQube Cloud 분석 ([sonarqube.yml](.github/workflows/sonarqube.yml))
 - CI는 -nographics라 GPU 렌더링 테스트는 건너뛰고 GpuInstanceRenderer.cs는 커버리지에서 제외. 로컬 GPU 환경에서 실행
 - `v*` 태그 push 시 GameCI로 Windows 빌드 후 Release 업로드 ([release.yml](.github/workflows/release.yml))
