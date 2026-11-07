@@ -7,6 +7,12 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+# Every job that activates the Unity license shares one group. Returning the
+# license in one run revokes the activation of any run still in progress.
+concurrency:
+  group: unity-license
+  cancel-in-progress: false
+
 env:
   PROJECT_PATH: Client
   SONAR_ORGANIZATION: lolisia
