@@ -130,8 +130,9 @@ namespace aisilol.Tests.Game
         {
             var pool = CreatePool(5);
             var result = new List<UpgradeDefinition>();
+            var random = new Unity.Mathematics.Random(1);
 
-            UpgradeSelector.Pick(pool, new PlayerStats(), 3, new System.Random(1), result);
+            UpgradeSelector.Pick(pool, new PlayerStats(), 3, ref random, result);
 
             Assert.AreEqual(3, result.Count);
             Assert.AreEqual(3, result.Distinct().Count());
@@ -150,7 +151,8 @@ namespace aisilol.Tests.Game
             stats.Apply(maxed);
 
             var result = new List<UpgradeDefinition>();
-            UpgradeSelector.Pick(pool, stats, 3, new System.Random(1), result);
+            var random = new Unity.Mathematics.Random(1);
+            UpgradeSelector.Pick(pool, stats, 3, ref random, result);
 
             Assert.AreEqual(2, result.Count);
             CollectionAssert.DoesNotContain(result, maxed);
@@ -163,8 +165,11 @@ namespace aisilol.Tests.Game
             var first = new List<UpgradeDefinition>();
             var second = new List<UpgradeDefinition>();
 
-            UpgradeSelector.Pick(pool, new PlayerStats(), 3, new System.Random(7), first);
-            UpgradeSelector.Pick(pool, new PlayerStats(), 3, new System.Random(7), second);
+            var firstRandom = new Unity.Mathematics.Random(7);
+            var secondRandom = new Unity.Mathematics.Random(7);
+
+            UpgradeSelector.Pick(pool, new PlayerStats(), 3, ref firstRandom, first);
+            UpgradeSelector.Pick(pool, new PlayerStats(), 3, ref secondRandom, second);
 
             CollectionAssert.AreEqual(first, second);
         }
@@ -173,8 +178,9 @@ namespace aisilol.Tests.Game
         public void UpgradeSelector_NullPool_ReturnsEmpty()
         {
             var result = new List<UpgradeDefinition> { null };
+            var random = new Unity.Mathematics.Random(1);
 
-            UpgradeSelector.Pick(null, new PlayerStats(), 3, new System.Random(), result);
+            UpgradeSelector.Pick(null, new PlayerStats(), 3, ref random, result);
 
             Assert.IsEmpty(result);
         }
