@@ -127,8 +127,8 @@ namespace aisilol.Tests.Game
         public void AuraFormulas_GrowWithLevel()
         {
             Assert.AreEqual(0, WeaponSystem.AuraRadiusFor(0), 1e-5f);
-            Assert.AreEqual(1.5f, WeaponSystem.AuraRadiusFor(1), 1e-5f);
-            Assert.AreEqual(4.65f, WeaponSystem.AuraRadiusFor(10), 1e-5f);
+            Assert.AreEqual(0.15f, WeaponSystem.AuraRadiusFor(1), 1e-5f);
+            Assert.AreEqual(0.465f, WeaponSystem.AuraRadiusFor(10), 1e-5f);
 
             // 틱 속도는 레벨당 15%씩 빨라지고, 틱당 피해는 Damage의 10%에서 레벨당 0.5%p 증가
             Assert.AreEqual(0.5f, WeaponSystem.AuraTickIntervalFor(1), 1e-5f);

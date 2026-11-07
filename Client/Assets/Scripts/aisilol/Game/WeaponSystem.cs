@@ -20,8 +20,8 @@ namespace aisilol.Game
         private const string EffectShaderPath = "Shaders/EffectUnlit";
         private const int JobBatchCount = 4;
 
-        private const float AuraBaseRadius = 1.5f;          // 1레벨 범위(m)
-        private const float AuraRadiusPerLevel = 0.35f;     // 레벨당 범위 증가(m)
+        private const float AuraBaseRadius = 0.15f;         // 1레벨 범위(m)
+        private const float AuraRadiusPerLevel = 0.035f;    // 레벨당 범위 증가(m)
         private const float AuraBaseTickInterval = 0.5f;    // 1레벨 틱 간격(초)
         private const float AuraTickRateGrowth = 0.15f;     // 레벨당 초당 틱 수 15% 증가
         private const float AuraBaseDamageRatio = 0.1f;     // 1레벨 틱당 피해 = Damage * 비율
@@ -317,7 +317,7 @@ namespace aisilol.Game
 
             _bolt = new GameObject("ChainBolt").AddComponent<LineRenderer>();
             _bolt.sharedMaterial = _boltMaterial;
-            _bolt.widthMultiplier = 0.08f;
+            _bolt.widthMultiplier = 0.02f;
             _bolt.useWorldSpace = true;
             _bolt.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _bolt.receiveShadows = false;
