@@ -8,7 +8,7 @@ using UnityEngine;
 namespace aisilol.Game
 {
     // 투사체 외 무기. 모두 Enemy 격자를 검색해 데미지 큐에 기록하는 Burst Job
-    // 오라   : 플레이어 주변 반경 안의 모든 Enemy에 초당 피해
+    // 오라   : 틱마다 플레이어 주변 반경 안의 모든 Enemy에 피해. 레벨이 오르면 범위 / 틱 속도 / 틱당 피해가 함께 증가
     // 칼날   : 플레이어 주위를 도는 칼날에 닿은 Enemy에 초당 피해
     // 연쇄 번개: 주기마다 가까운 Enemy를 맞히고, 맞히지 않은 가장 가까운 Enemy로 이어서 튐
     //
@@ -20,7 +20,13 @@ namespace aisilol.Game
         private const string EffectShaderPath = "Shaders/EffectUnlit";
         private const int JobBatchCount = 4;
 
-        private const float AuraDamageRatio = 1.5f;     // 초당 피해 = Damage * 비율
+        private const float AuraBaseRadius = 1.5f;          // 1레벨 범위(m)
+        private const float AuraRadiusPerLevel = 0.35f;     // 레벨당 범위 증가(m)
+        private const float AuraBaseTickInterval = 0.5f;    // 1레벨 틱 간격(초)
+        private const float AuraTickRateGrowth = 0.15f;     // 레벨당 초당 틱 수 15% 증가
+        private const float AuraBaseDamageRatio = 0.5f;     // 1레벨 틱당 피해 = Damage * 비율
+        private const float AuraDamageRatioPerLevel = 0.1f; // 레벨당 틱당 피해 비율 증가
+        private const float AuraPulseDuration = 0.15f;      // 틱마다 오라가 밝아지는 시간(초)
         private const float OrbitRadius = 1.6f;         // 칼날이 도는 반경(m)
         private const float OrbitSpeed = 3;             // rad/s
         private const float OrbitDamageRatio = 4;       // 칼날에 닿아 있는 동안 초당 피해 = Damage * 비율
@@ -38,7 +44,6 @@ namespace aisilol.Game
         private static readonly Color BoltColor = new(0.7f, 0.85f, 1f, 1f);
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int RingId = Shader.PropertyToID("_Ring");
-        private static readonly int PulseSpeedId = Shader.PropertyToID("_PulseSpeed");
 
         // GPU 렌더링 시 칼날이 빠르게 회전
         private static readonly VertexAnimation BladeAnimation = new() { spin = 12 };
@@ -56,6 +61,8 @@ namespace aisilol.Game
         private JobHandle _jobHandle;
 
         private float _orbitAngle;
+        private float _auraTimer;
+        private float _auraPulse;
         private float _chainCooldown;
         private bool _chainScheduled;
         private Unity.Mathematics.Random _random = new((uint)System.Environment.TickCount | 1);
@@ -66,7 +73,9 @@ namespace aisilol.Game
         private Material _boltMaterial;
         private float _boltTimer;
 
+        public int AuraLevel { get; private set; }
         public float AuraRadius { get; private set; }
+        public int AuraTicks { get; private set; }      // 피해를 준 오라 틱 수
         public int BladeCount => _bladePositions.IsCreated ? _bladePositions.Length : 0;
         public int ChainStrikes { get; private set; }   // 1명 이상 맞힌 연쇄 번개 횟수
         public int LastChainHits { get; private set; }  // 마지막 연쇄 번개가 맞힌 Enemy 수
@@ -116,15 +125,28 @@ namespace aisilol.Game
             _chainCooldown -= deltaTime;
             _chainScheduled = false;
 
+            // 얻기 전에는 타이머를 0으로 두어 얻자마자 첫 틱
+            AuraLevel = Mathf.Max(0, Mathf.FloorToInt(_stats.Get(StatType.AuraLevel)));
+            AuraRadius = AuraRadiusFor(AuraLevel);
+            _auraTimer = AuraLevel > 0 ? _auraTimer - deltaTime : 0;
+
             if (!_enemies || !_enemies.IsGridScheduled)
                 return;
 
             var damage = _stats.Get(StatType.Damage);
             var handle = _enemies.DamageDependency;
 
-            AuraRadius = Mathf.Max(0, _stats.Get(StatType.AuraRadius));
-            if (AuraRadius > 0)
+            if (AuraLevel > 0 && _auraTimer <= 0)
             {
+                // 한 프레임이 틱 간격보다 길어도 밀린 틱을 몰아서 주지 않음
+                var interval = AuraTickIntervalFor(AuraLevel);
+                _auraTimer += interval;
+                if (_auraTimer <= 0)
+                    _auraTimer = interval;
+
+                ++AuraTicks;
+                _auraPulse = AuraPulseDuration;
+
                 handle = new AreaDamageJob
                 {
                     positions = _enemies.Positions,
@@ -133,7 +155,7 @@ namespace aisilol.Game
                     inverseCellSize = _enemies.InverseCellSize,
                     center = center.xz,
                     radius = AuraRadius + _enemies.Radius,
-                    amount = damage * AuraDamageRatio * deltaTime,
+                    amount = damage * AuraDamageRatioFor(AuraLevel),
                 }.Schedule(handle);
             }
 
@@ -233,6 +255,21 @@ namespace aisilol.Game
                 Destroy(_boltMaterial);
         }
 
+        internal static float AuraRadiusFor(int level)
+        {
+            return level > 0 ? AuraBaseRadius + AuraRadiusPerLevel * (level - 1) : 0;
+        }
+
+        internal static float AuraTickIntervalFor(int level)
+        {
+            return AuraBaseTickInterval / (1 + AuraTickRateGrowth * Mathf.Max(0, level - 1));
+        }
+
+        internal static float AuraDamageRatioFor(int level)
+        {
+            return AuraBaseDamageRatio + AuraDamageRatioPerLevel * Mathf.Max(0, level - 1);
+        }
+
         // 칼날 수만큼 같은 간격으로 플레이어 주위에 배치. 진행 방향을 바라보도록 회전
         private void UpdateBlades(float3 center, float deltaTime)
         {
@@ -264,7 +301,6 @@ namespace aisilol.Game
             _auraMaterial = new Material(shader) { name = "Aura" };
             _auraMaterial.SetColor(BaseColorId, AuraColor);
             _auraMaterial.SetFloat(RingId, 1);
-            _auraMaterial.SetFloat(PulseSpeedId, 4);
 
             _aura = GameObject.CreatePrimitive(PrimitiveType.Quad);
             _aura.name = "Aura";
@@ -327,6 +363,12 @@ namespace aisilol.Game
                     position.y = 0.02f;     // 바닥 바로 위
                     _aura.transform.position = position;
                     _aura.transform.localScale = Vector3.one * (AuraRadius * 2);
+
+                    // 틱마다 잠깐 밝아짐
+                    _auraPulse = Mathf.Max(0, _auraPulse - deltaTime);
+                    var auraColor = AuraColor;
+                    auraColor.a = Mathf.Min(1, AuraColor.a * (1 + 2 * _auraPulse / AuraPulseDuration));
+                    _auraMaterial.SetColor(BaseColorId, auraColor);
                 }
             }
 

@@ -15,5 +15,5 @@ MonoBehaviour:
   displayName: Aura
   stat: 9
   modifier: 0
-  value: 0.5
+  value: 1
   maxLevel: 10

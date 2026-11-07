@@ -85,19 +85,56 @@ namespace aisilol.Tests.Game
         [UnityTest]
         public IEnumerator Aura_KillsEnemiesAroundPlayerAndShowsRing()
         {
-            _stats.SetBase(StatType.AuraRadius, 3);
+            _stats.SetBase(StatType.AuraLevel, 3);
             Initialize();
             yield return GatherEnemies(50);
             yield return TestHelper.WaitUntil(() => _enemies.KillCount > 0);
 
             Assert.Greater(_enemies.KillCount, 0);
-            Assert.AreEqual(3, _weapons.AuraRadius, 1e-5f);
+            Assert.AreEqual(3, _weapons.AuraLevel);
+            Assert.AreEqual(WeaponSystem.AuraRadiusFor(3), _weapons.AuraRadius, 1e-5f);
             Assert.IsTrue(_weapons.IsAuraVisible);
 
-            // 반경이 0이 되면 숨김
-            _stats.SetBase(StatType.AuraRadius, 0);
+            // 레벨이 0이 되면 숨김
+            _stats.SetBase(StatType.AuraLevel, 0);
             yield return TestHelper.WaitFrames(2);
             Assert.IsFalse(_weapons.IsAuraVisible);
+            Assert.AreEqual(0, _weapons.AuraRadius, 1e-5f);
+        }
+
+        [UnityTest]
+        public IEnumerator Aura_DamagesOnTicksNotEveryFrame()
+        {
+            // 1레벨 틱 간격 0.5초. 얻자마자 첫 틱, 이후 간격마다 1회
+            Initialize();
+            _stats.SetBase(StatType.AuraLevel, 1);
+
+            var frames = 0;
+            var gameTime = 0f;
+            yield return TestHelper.WaitUntil(() =>
+            {
+                ++frames;
+                gameTime += Time.deltaTime;
+                return gameTime >= 1.2f && frames >= 10;
+            });
+
+            // 1.2초 동안 0, 0.5, 1.0초에 틱
+            Assert.AreEqual(3, _weapons.AuraTicks, 1);
+            Assert.Less(_weapons.AuraTicks, frames);
+        }
+
+        [Test]
+        public void AuraFormulas_GrowWithLevel()
+        {
+            Assert.AreEqual(0, WeaponSystem.AuraRadiusFor(0), 1e-5f);
+            Assert.AreEqual(1.5f, WeaponSystem.AuraRadiusFor(1), 1e-5f);
+            Assert.AreEqual(4.65f, WeaponSystem.AuraRadiusFor(10), 1e-5f);
+
+            // 틱 속도는 레벨당 15%씩 빨라지고, 틱당 피해는 Damage의 50%에서 레벨당 10%p 증가
+            Assert.AreEqual(0.5f, WeaponSystem.AuraTickIntervalFor(1), 1e-5f);
+            Assert.AreEqual(0.5f / 2.35f, WeaponSystem.AuraTickIntervalFor(10), 1e-5f);
+            Assert.AreEqual(0.5f, WeaponSystem.AuraDamageRatioFor(1), 1e-5f);
+            Assert.AreEqual(1.4f, WeaponSystem.AuraDamageRatioFor(10), 1e-5f);
         }
 
         [UnityTest]
@@ -151,7 +188,7 @@ namespace aisilol.Tests.Game
         [UnityTest]
         public IEnumerator OnDestroy_RemovesEffects()
         {
-            _stats.SetBase(StatType.AuraRadius, 1);
+            _stats.SetBase(StatType.AuraLevel, 1);
             _stats.SetBase(StatType.OrbitCount, 2);
             Initialize();
             yield return TestHelper.WaitFrames(2);

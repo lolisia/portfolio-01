@@ -14,7 +14,7 @@ namespace aisilol.Game
         Range,
         Pierce,     // 투사체 1발이 맞힐 수 있는 Enemy 수. 에셋에 enum 값이 저장되므로 항상 끝에 추가
         Magnet,     // 경험치 Object / HP 포션을 끌어오는 반경(m)
-        AuraRadius, // 플레이어 주변에 지속 피해를 주는 범위(m). 0이면 없음
+        AuraLevel,  // 오라 레벨. 범위 / 틱 속도 / 틱당 피해가 함께 증가. 0이면 없음
         OrbitCount, // 플레이어 주위를 도는 칼날 수
         ChainCount, // 연쇄 번개가 맞히는 Enemy 수
     }

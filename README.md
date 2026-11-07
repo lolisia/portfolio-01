@@ -43,7 +43,7 @@
 - 맞힌 Enemy는 `NativeQueue` 데미지 큐에 기록하고, EnemyManager가 LateUpdate에서 일괄 적용. 데미지를 기록하는 Job끼리는 순서대로 연결
 
 **무기** ([WeaponSystem.cs](Client/Assets/Scripts/aisilol/Game/WeaponSystem.cs))
-- 오라: 플레이어 주변 반경 안의 Enemy에 초당 피해
+- 오라: 틱마다 플레이어 주변 반경 안의 Enemy에 피해. 레벨당 범위 +0.35m(1레벨 1.5m), 초당 틱 수 +15%(1레벨 0.5초 간격), 틱당 피해 +10%p(1레벨 Damage의 50%)
 - 칼날: 플레이어 주위를 도는 칼날에 닿은 Enemy에 초당 피해. 칼날마다 `IJobParallelFor`
 - 연쇄 번개: 1초마다 가까운 Enemy를 맞히고, 맞히지 않은 가장 가까운 Enemy로 이어서 튐
 - 모두 Enemy 격자를 검색하는 Burst Job. 강화(Aura / Orbit / Chain)로 획득
@@ -89,7 +89,7 @@ flowchart LR
 
 ## 테스트 / CI
 
-- PlayMode 테스트 188개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
+- PlayMode 테스트 190개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
 - push / PR 시 테스트 + 커버리지 + SonarQube Cloud 분석 ([sonarqube.yml](.github/workflows/sonarqube.yml))
 - CI는 -nographics라 GPU 렌더링 테스트는 건너뛰고 GpuInstanceRenderer.cs는 커버리지에서 제외. 로컬 GPU 환경에서 실행
 - `v*` 태그 push 시 GameCI로 Windows 빌드 후 Release 업로드 ([release.yml](.github/workflows/release.yml))
