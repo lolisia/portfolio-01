@@ -386,6 +386,8 @@ namespace aisilol.Tests.Game
             using var speeds = new NativeArray<float>(Enumerable.Repeat(speed, positions.Length).ToArray(), Allocator.TempJob);
             using var nextPositions = new NativeArray<float3>(positions.Length, Allocator.TempJob);
             using var matrices = new NativeArray<Matrix4x4>(positions.Length, Allocator.TempJob);
+            using var hitTimers = new NativeArray<float>(positions.Length, Allocator.TempJob);
+            using var groups = new NativeArray<int>(positions.Length, Allocator.TempJob);
             using var grid = new NativeParallelMultiHashMap<int2, int>(positions.Length, Allocator.TempJob);
 
             const float cellSize = 1;
@@ -403,6 +405,8 @@ namespace aisilol.Tests.Game
                 grid = grid,
                 nextPositions = nextPositions,
                 matrices = matrices,
+                hitTimers = hitTimers,
+                groups = groups,
                 inverseCellSize = 1 / cellSize,
                 separationRadius = cellSize,
                 target = target,
@@ -454,6 +458,96 @@ namespace aisilol.Tests.Game
             RunMoveJob(new[] { new float3(0, 0, 0), new float3(0, 0, 0) }, 0, float3.zero, 0.1f, out var position, out _);
 
             Assert.Less(position.x, 0);
+        }
+
+        [Test]
+        public void MoveJob_HitTimer_CountsDownAndReturnsToNormalGroup()
+        {
+            using var positions = new NativeArray<float3>(new[] { float3.zero, new float3(5, 0, 0) }, Allocator.TempJob);
+            using var speeds = new NativeArray<float>(2, Allocator.TempJob);
+            using var nextPositions = new NativeArray<float3>(2, Allocator.TempJob);
+            using var matrices = new NativeArray<Matrix4x4>(2, Allocator.TempJob);
+            using var hitTimers = new NativeArray<float>(new[] { 0.3f, 0.1f }, Allocator.TempJob);
+            using var groups = new NativeArray<int>(new[] { EnemyManager.HitGroup, EnemyManager.HitGroup }, Allocator.TempJob);
+            using var grid = new NativeParallelMultiHashMap<int2, int>(2, Allocator.TempJob);
+
+            new EnemyManager.MoveJob
+            {
+                positions = positions,
+                speeds = speeds,
+                grid = grid,
+                nextPositions = nextPositions,
+                matrices = matrices,
+                hitTimers = hitTimers,
+                groups = groups,
+                inverseCellSize = 1,
+                separationRadius = 1,
+                rotation = quaternion.identity,
+                scale = new float3(1),
+                deltaTime = 0.2f,
+            }.Run(2);
+
+            // 남은 시간이 있으면 피격 그룹 유지, 다 지나면 0에서 멈추고 원래 그룹
+            Assert.AreEqual(0.1f, hitTimers[0], 1e-5f);
+            Assert.AreEqual(EnemyManager.HitGroup, groups[0]);
+            Assert.AreEqual(0, hitTimers[1], 1e-5f);
+            Assert.AreEqual(EnemyManager.NormalGroup, groups[1]);
+        }
+
+        [Test]
+        public void ApplyDamageJob_SurvivorFlashesAndDeadIsRemoved()
+        {
+            using var positions = new NativeList<float3>(Allocator.TempJob);
+            using var nextPositions = new NativeList<float3>(Allocator.TempJob);
+            using var speeds = new NativeList<float>(Allocator.TempJob);
+            using var healths = new NativeList<float>(Allocator.TempJob);
+            using var hitTimers = new NativeList<float>(Allocator.TempJob);
+            using var groups = new NativeList<int>(Allocator.TempJob);
+            using var matrices = new NativeList<Matrix4x4>(Allocator.TempJob);
+            using var deathPositions = new NativeList<float3>(Allocator.TempJob);
+            using var killCount = new NativeReference<int>(Allocator.TempJob);
+            using var damages = new NativeQueue<EnemyDamage>(Allocator.TempJob);
+
+            for (var index = 0; index < 3; index++)
+            {
+                positions.Add(new float3(index, 0, 0));
+                nextPositions.Add(new float3(index, 0, 0));
+                speeds.Add(1);
+                healths.Add(10);
+                hitTimers.Add(0);
+                groups.Add(EnemyManager.NormalGroup);
+                matrices.Add(Matrix4x4.identity);
+            }
+
+            damages.Enqueue(new EnemyDamage { index = 0, amount = 3 });
+            damages.Enqueue(new EnemyDamage { index = 1, amount = 20 });
+            damages.Enqueue(new EnemyDamage { index = 7, amount = 1 });
+
+            new EnemyManager.ApplyDamageJob
+            {
+                damages = damages,
+                positions = positions,
+                nextPositions = nextPositions,
+                speeds = speeds,
+                healths = healths,
+                hitTimers = hitTimers,
+                groups = groups,
+                matrices = matrices,
+                deathPositions = deathPositions,
+                killCount = killCount,
+                hitFlashDuration = 0.1f,
+            }.Run();
+
+            // 1번이 사망해 제거되고 2번이 그 자리로 옮겨옴. 0번은 피격 색, 2번은 맞지 않아 원래 색
+            Assert.AreEqual(2, healths.Length);
+            Assert.AreEqual(1, killCount.Value);
+            Assert.AreEqual(new float3(1, 0, 0), deathPositions[0]);
+            Assert.AreEqual(7, healths[0], 1e-5f);
+            Assert.AreEqual(0.1f, hitTimers[0], 1e-5f);
+            Assert.AreEqual(EnemyManager.HitGroup, groups[0]);
+            Assert.AreEqual(new float3(2, 0, 0), positions[1]);
+            Assert.AreEqual(0, hitTimers[1], 1e-5f);
+            Assert.AreEqual(EnemyManager.NormalGroup, groups[1]);
         }
 
         [Test]

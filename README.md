@@ -23,9 +23,10 @@
 - 이동은 위치 이중 버퍼. 이웃 위치를 읽는 동안 덮어쓰지 않음
 - Update에서 Job 예약, LateUpdate에서 완료 후 데미지 적용 / 사망 제거(swap-back)를 Burst `IJob`으로 처리
 - 렌더링은 아래 렌더링 항목 참고
-- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 레벨에 따라 지수 증가(기본값 * 증가율^(레벨 - 1)), 체력은 경과 시간 커브로 증가
+- 스폰 위치는 카메라 화면 모서리를 지면에 투영해서 항상 화면 밖으로 계산. 초당 생성 수는 레벨에 따라 지수 증가(기본값 * 증가율^(레벨 - 1)), 체력은 플레이어 레벨에 비례해 증가(배율 = 1 + 0.24 * (레벨 - 1), 100레벨에서 약 50)
 - Enemy 수는 고정 상한 없음. 평균 FPS(0.5초 지수 이동 평균)가 기준(기본 60) 아래면 생성 중지
 - 한 프레임 생성 수는 상한(기본 100)까지. 넘는 수는 이월하지 않음
+- 피격된 Enemy는 0.1초 동안 피격 색으로 표시. 같은 Mesh에 피격 색 Material을 쓰는 렌더링 그룹으로 분리
 
 **렌더링** ([InstanceRenderer.cs](Client/Assets/Scripts/aisilol/Game/InstanceRenderer.cs), [GpuInstanceRenderer.cs](Client/Assets/Scripts/aisilol/Game/GpuInstanceRenderer.cs))
 - Enemy / 투사체 / 드롭 / 칼날 공용. GameManager의 `GPU 렌더링` 옵션으로 두 경로 전환. HUD에 현재 경로 표시
@@ -88,7 +89,7 @@ flowchart LR
 
 ## 테스트 / CI
 
-- PlayMode 테스트 184개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
+- PlayMode 테스트 188개: [Client/Assets/Tests](Client/Assets/Tests). Job은 단위 테스트, 시스템은 빈 씬에서 통합 테스트
 - push / PR 시 테스트 + 커버리지 + SonarQube Cloud 분석 ([sonarqube.yml](.github/workflows/sonarqube.yml))
 - CI는 -nographics라 GPU 렌더링 테스트는 건너뛰고 GpuInstanceRenderer.cs는 커버리지에서 제외. 로컬 GPU 환경에서 실행
 - `v*` 태그 push 시 GameCI로 Windows 빌드 후 Release 업로드 ([release.yml](.github/workflows/release.yml))

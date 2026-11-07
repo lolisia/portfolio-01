@@ -27,11 +27,18 @@ namespace aisilol.Game
         private const float FpsSmoothingTime = 0.5f;    // 평균 FPS 계산에 반영하는 시간(초). 순간적인 끊김으로 생성이 멈추지 않도록 완만하게
         private const float SeparationSpeed = 1;        // 완전히 겹쳤을 때 서로 밀어내는 속도(m/s)
         private const int MaxSeparationNeighbors = 16;  // 밀집 지역에서 Enemy 1개당 확인하는 이웃 수 제한
+        internal const float HitFlashDuration = 0.1f;   // 피격 후 색이 바뀌어 보이는 시간(초)
+
+        // 렌더링 그룹. 피격 중인 Enemy는 같은 Mesh에 피격 색 Material로 렌더링
+        internal const int NormalGroup = 0;
+        internal const int HitGroup = 1;
+        private static readonly Color HitFlashColor = new(1f, 0.45f, 0.45f);
 
         private GameObject _player;
         private Camera _gameCamera;
         private InstancedMesh _mesh;
         private InstanceRenderer _renderer;
+        private Material _hitMaterial;
 
         private Vector2 _speedRange;
         private float _maxHealth;
@@ -51,6 +58,8 @@ namespace aisilol.Game
         private NativeList<float3> _nextPositions;
         private NativeList<float> _speeds;
         private NativeList<float> _healths;
+        private NativeList<float> _hitTimers;   // 피격 후 남은 색 변경 시간. 0이면 원래 색
+        private NativeList<int> _groups;        // 렌더링 그룹. NormalGroup / HitGroup
         private NativeList<Matrix4x4> _matrices;
         private NativeParallelMultiHashMap<int2, int> _grid;
         private NativeQueue<EnemyDamage> _damageQueue;
@@ -169,13 +178,18 @@ namespace aisilol.Game
             _nextPositions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
             _speeds = new NativeList<float>(InitialCapacity, Allocator.Persistent);
             _healths = new NativeList<float>(InitialCapacity, Allocator.Persistent);
+            _hitTimers = new NativeList<float>(InitialCapacity, Allocator.Persistent);
+            _groups = new NativeList<int>(InitialCapacity, Allocator.Persistent);
             _matrices = new NativeList<Matrix4x4>(InitialCapacity, Allocator.Persistent);
             _grid = new NativeParallelMultiHashMap<int2, int>(InitialCapacity, Allocator.Persistent);
             _damageQueue = new NativeQueue<EnemyDamage>(Allocator.Persistent);
             _contactCount = new NativeReference<int>(Allocator.Persistent);
             _deathPositions = new NativeList<float3>(InitialCapacity, Allocator.Persistent);
             _killCount = new NativeReference<int>(Allocator.Persistent);
-            _renderer = new InstanceRenderer(EnemyAnimation, _mesh);
+            _hitMaterial = new Material(mesh.Material) { name = $"{mesh.Material.name}_Hit" };
+            _hitMaterial.SetColor("_BaseColor", HitFlashColor);
+            _hitMaterial.SetColor("_Color", HitFlashColor);
+            _renderer = new InstanceRenderer(EnemyAnimation, _mesh, _mesh.WithMaterial(_hitMaterial));
         }
 
         // 메인 스레드에서 데미지 예약. LateUpdate에서 Job이 기록한 데미지와 함께 적용
@@ -227,6 +241,8 @@ namespace aisilol.Game
                 grid = _grid,
                 nextPositions = _nextPositions.AsArray(),
                 matrices = _matrices.AsArray(),
+                hitTimers = _hitTimers.AsArray(),
+                groups = _groups.AsArray(),
                 inverseCellSize = _inverseCellSize,
                 separationRadius = _radius * 2,
                 target = playerPosition,
@@ -269,7 +285,7 @@ namespace aisilol.Game
             ApplyDamages();
 
             _renderer.UseGpu = UseGpuRendering;
-            _renderer.Render(_matrices.AsArray(), CullingCamera);
+            _renderer.Render(_matrices.AsArray(), _groups.AsArray(), CullingCamera);
         }
 
         private void OnDestroy()
@@ -288,6 +304,12 @@ namespace aisilol.Game
 
             if (_healths.IsCreated)
                 _healths.Dispose();
+
+            if (_hitTimers.IsCreated)
+                _hitTimers.Dispose();
+
+            if (_groups.IsCreated)
+                _groups.Dispose();
 
             if (_matrices.IsCreated)
                 _matrices.Dispose();
@@ -309,6 +331,9 @@ namespace aisilol.Game
 
             _renderer?.Dispose();
             _renderer = null;
+
+            if (_hitMaterial)
+                Destroy(_hitMaterial);
         }
 
         // 모든 데미지를 먼저 적용한 뒤 사망한 Enemy를 제거. 데미지의 인덱스는 제거 전 기준
@@ -326,8 +351,11 @@ namespace aisilol.Game
                 nextPositions = _nextPositions,
                 speeds = _speeds,
                 healths = _healths,
+                hitTimers = _hitTimers,
+                groups = _groups,
                 matrices = _matrices,
                 deathPositions = _deathPositions,
+                hitFlashDuration = HitFlashDuration,
                 killCount = _killCount,
             }.Run();
 
@@ -373,6 +401,8 @@ namespace aisilol.Game
                 _nextPositions.Add(position);
                 _speeds.Add(UnityEngine.Random.Range(_speedRange.x, _speedRange.y));
                 _healths.Add(health);
+                _hitTimers.Add(0);
+                _groups.Add(NormalGroup);
                 _matrices.Add(default);    // MoveJob에서 매 프레임 채움
             }
 
@@ -440,6 +470,7 @@ namespace aisilol.Game
         }
 
         // 데미지 큐를 비우며 체력을 깎고, 사망한 Enemy를 swap-back으로 제거. 이미 사망했거나 범위 밖 인덱스는 무시
+        // 살아남은 피격 Enemy는 피격 색 시간을 다시 채우고 바로 피격 그룹으로 렌더링
         [BurstCompile]
         internal struct ApplyDamageJob : IJob
         {
@@ -448,9 +479,12 @@ namespace aisilol.Game
             public NativeList<float3> nextPositions;
             public NativeList<float> speeds;
             public NativeList<float> healths;
+            public NativeList<float> hitTimers;
+            public NativeList<int> groups;
             public NativeList<Matrix4x4> matrices;
             public NativeList<float3> deathPositions;
             public NativeReference<int> killCount;
+            public float hitFlashDuration;
 
             public void Execute()
             {
@@ -468,6 +502,8 @@ namespace aisilol.Game
 
                     health -= damage.amount;
                     healths[damage.index] = health;
+                    hitTimers[damage.index] = hitFlashDuration;
+                    groups[damage.index] = HitGroup;
                     anyDead |= health <= 0;
                 }
 
@@ -485,6 +521,8 @@ namespace aisilol.Game
                     nextPositions.RemoveAtSwapBack(index);
                     speeds.RemoveAtSwapBack(index);
                     healths.RemoveAtSwapBack(index);
+                    hitTimers.RemoveAtSwapBack(index);
+                    groups.RemoveAtSwapBack(index);
                     matrices.RemoveAtSwapBack(index);
                     ++killCount.Value;
                 }
@@ -500,6 +538,8 @@ namespace aisilol.Game
             [ReadOnly] public NativeParallelMultiHashMap<int2, int> grid;
             [WriteOnly] public NativeArray<float3> nextPositions;
             [WriteOnly] public NativeArray<Matrix4x4> matrices;
+            public NativeArray<float> hitTimers;
+            [WriteOnly] public NativeArray<int> groups;
             public float inverseCellSize;
             public float separationRadius;
             public float3 target;
@@ -531,6 +571,10 @@ namespace aisilol.Game
                 position.xz += move + separation.push * (SeparationSpeed * deltaTime);
                 nextPositions[index] = position;
                 matrices[index] = float4x4.TRS(position, rotation, scale);
+
+                var hitTimer = math.max(0, hitTimers[index] - deltaTime);
+                hitTimers[index] = hitTimer;
+                groups[index] = hitTimer > 0 ? HitGroup : NormalGroup;
             }
         }
 
