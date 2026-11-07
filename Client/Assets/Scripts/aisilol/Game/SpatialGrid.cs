@@ -31,17 +31,27 @@ namespace aisilol.Game
             {
                 for (var y = minCell.y; y <= maxCell.y; ++y)
                 {
-                    if (!grid.TryGetFirstValue(new int2(x, y), out var index, out var iterator))
-                        continue;
-
-                    do
-                    {
-                        if (!visitor.Visit(index))
-                            return;
-                    }
-                    while (grid.TryGetNextValue(out index, ref iterator));
+                    if (!VisitCell(grid, new int2(x, y), ref visitor))
+                        return;
                 }
             }
+        }
+
+        // 셀 하나의 인덱스를 모두 방문. visitor가 중단하면 false
+        public static bool VisitCell<T>(NativeParallelMultiHashMap<int2, int> grid, int2 cell, ref T visitor)
+            where T : struct, IVisitor
+        {
+            if (!grid.TryGetFirstValue(cell, out var index, out var iterator))
+                return true;
+
+            do
+            {
+                if (!visitor.Visit(index))
+                    return false;
+            }
+            while (grid.TryGetNextValue(out index, ref iterator));
+
+            return true;
         }
 
         [BurstCompile]

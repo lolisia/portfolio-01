@@ -68,6 +68,8 @@ jobs:
           dotnet tool install --global dotnet-sonarscanner
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
+      # GpuInstanceRenderer needs a real graphics device (compute kernels are not compiled under -nographics),
+      # so its tests are ignored here and it is excluded from coverage. It is covered by GpuInstanceRendererTests on a local GPU.
       - name: Begin analysis and build
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -79,7 +81,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.verbose=${{ runner.debug == '1' }} \
             /d:sonar.exclusions="**/InputSystem_Actions.cs" \
-            /d:sonar.coverage.exclusions="**/Assets/Tests/**,**/Editor/**" \
+            /d:sonar.coverage.exclusions="**/Assets/Tests/**,**/Editor/**,**/GpuInstanceRenderer.cs" \
             /d:sonar.cs.opencover.reportsPaths="$GITHUB_WORKSPACE/$TEST_ARTIFACTS_DIR/coverage/**/TestCoverageResults_*.xml"
           # Unity projects reference NUnit/TestRunner, so the scanner would treat them as test projects.
           dotnet build "$PROJECT_PATH/$PROJECT_PATH.sln" --configuration Debug -p:SonarQubeTestProject=false

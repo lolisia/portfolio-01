@@ -1,0 +1,54 @@
+// Instance 시야 판정과 그룹별 수집을 GPU에서 처리
+// 보이는 Instance의 인덱스를 그룹 구간(group * _Capacity ~)에 기록하고, 그룹별 Indirect 인자의 instanceCount를 증가
+#pragma kernel Cull
+
+StructuredBuffer<float4x4> _Matrices;
+StructuredBuffer<int> _Groups;
+RWStructuredBuffer<uint> _Visible;
+RWByteAddressBuffer _Args;          // 그룹마다 IndirectDrawIndexedArgs(uint 5개, 20 byte). instanceCount는 두 번째 값
+
+float4 _Planes[6];                  // xyz: 법선, w: 거리
+uint _Count;
+uint _Capacity;
+uint _GroupCount;
+uint _HasGroups;
+uint _Cull;
+float _BoundsRadius;                // Scale 1 기준 Mesh를 감싸는 구의 반지름
+
+static const uint ArgsStride = 20;
+static const uint InstanceCountOffset = 4;
+
+[numthreads(64, 1, 1)]
+void Cull(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _Count)
+        return;
+
+    float4x4 m = _Matrices[index];
+
+    if (_Cull != 0)
+    {
+        float3 center = float3(m._m03, m._m13, m._m23);
+        float3 sqrScale = float3(
+            dot(float3(m._m00, m._m10, m._m20), float3(m._m00, m._m10, m._m20)),
+            dot(float3(m._m01, m._m11, m._m21), float3(m._m01, m._m11, m._m21)),
+            dot(float3(m._m02, m._m12, m._m22), float3(m._m02, m._m12, m._m22)));
+        float radius = _BoundsRadius * sqrt(max(sqrScale.x, max(sqrScale.y, sqrScale.z)));
+
+        [unroll]
+        for (uint plane = 0; plane < 6; plane++)
+        {
+            if (dot(_Planes[plane].xyz, center) + _Planes[plane].w < -radius)
+                return;
+        }
+    }
+
+    uint group = 0;
+    if (_HasGroups != 0)
+        group = (uint)clamp(_Groups[index], 0, (int)_GroupCount - 1);
+
+    uint slot;
+    _Args.InterlockedAdd(group * ArgsStride + InstanceCountOffset, 1, slot);
+    _Visible[group * _Capacity + slot] = index;
+}

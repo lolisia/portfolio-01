@@ -161,6 +161,31 @@ namespace aisilol.Tests.Game
         }
 
         [UnityTest]
+        public IEnumerator Merge_OverMaxCount_MergesDistantObjectsAndKeepsValue()
+        {
+            // 화면 밖 넓은 범위에서 처치해 서로 멀리 떨어진 드롭도 상한을 넘으면 병합. 획득한 경험치 합은 그대로
+            _stats.SetBase(StatType.Magnet, 0.1f);
+            Initialize();
+            _pickups.MaxExperienceObjects = 5;
+            yield return KillEnemies(300);
+
+            // 단계마다 10개 미만은 병합되지 않고 남음. 300개 → 3단계 이하
+            var kills = _enemies.KillCount;
+            yield return TestHelper.WaitUntil(() => _pickups.ExperienceObjectCount <= 27, 2);
+            Assert.LessOrEqual(_pickups.ExperienceObjectCount, 27);
+
+            _pickups.AttractAllExperience();
+            var experience = 0;
+            yield return TestHelper.WaitUntil(() =>
+            {
+                experience += _pickups.TakeExperience();
+                return _pickups.ExperienceObjectCount == 0;
+            });
+
+            Assert.AreEqual(kills, experience);
+        }
+
+        [UnityTest]
         public IEnumerator OnDestroy_WithoutInitialize_DoesNotThrow()
         {
             Object.Destroy(_pickups.gameObject);
@@ -329,8 +354,8 @@ namespace aisilol.Tests.Game
             public float3[] positions;
         }
 
-        // 셀 크기 1m, 단계마다 3배
-        private static MergeResult RunMergeJob(float3[] positions, int[] tiers, byte[] attracted = null, float[] values = null)
+        // 기본 셀 크기 1m, 단계마다 3배
+        private static MergeResult RunMergeJob(float3[] positions, int[] tiers, byte[] attracted = null, float[] values = null, float cellSize = 1)
         {
             using var positionArray = new NativeArray<float3>(positions, Allocator.TempJob);
             using var valueArray = new NativeArray<float>(values ?? Enumerable.Repeat(1f, positions.Length).ToArray(), Allocator.TempJob);
@@ -345,13 +370,24 @@ namespace aisilol.Tests.Game
                 tiers = tierArray,
                 attracted = attractedArray,
                 matrices = matrices,
-                cellSize = 1,
+                cellSize = cellSize,
                 cellGrowth = 3,
                 rotation = quaternion.identity,
                 scale = new float3(1),
             }.Run();
 
             return new MergeResult { values = valueArray.ToArray(), tiers = tierArray.ToArray(), positions = positionArray.ToArray() };
+        }
+
+        [Test]
+        public void MergeJob_InfiniteCellSize_MergesRegardlessOfPosition()
+        {
+            // 상한을 넘었을 때의 마지막 병합. 원점을 기준으로 서로 다른 사분면에 멀리 떨어져 있어도 병합
+            var positions = Enumerable.Range(0, 10).Select(index => new float3(index % 2 == 0 ? -500 : 500, 0, index < 5 ? -500 : 500)).ToArray();
+            var result = RunMergeJob(positions, new int[10], cellSize: float.PositiveInfinity);
+
+            Assert.AreEqual(1, CountNear(result.values, 10));
+            Assert.AreEqual(9, CountNear(result.values, 0));
         }
 
         [Test]

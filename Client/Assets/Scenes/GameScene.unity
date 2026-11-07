@@ -861,6 +861,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a3b302a68113a714fbb98afea8a5b691, type: 2}
   - {fileID: 11400000, guid: 0272d808c57044f8ae5916fe84c9b75f, type: 2}
   - {fileID: 11400000, guid: 83c6c2d0960b49dc92eb27811f2f5bd9, type: 2}
+  - {fileID: 11400000, guid: 0f7b5b91258f4f76a30e379a01159b8e, type: 2}
+  - {fileID: 11400000, guid: 774824b169fe44d598bad45b2dab885c, type: 2}
+  - {fileID: 11400000, guid: 4b102e43d6344fa1a60426b39ded20a0, type: 2}
   spawnPerSecondBase: 15
   spawnPerSecondGrowth: 1.3
   enemyHealthMultiplier:

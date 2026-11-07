@@ -31,7 +31,8 @@ namespace aisilol.Game
         private NativeList<float> _ages;
         private NativeList<int> _pierces;       // 남은 관통 수. 0이 되면 제거
         private NativeList<Matrix4x4> _matrices;
-        private NativeReference<int> _nearest;
+        private NativeReference<float4> _target;    // xyz: 사거리 안 가장 가까운 Enemy 위치, w: 1이면 찾음
+        private bool _targetScheduled;              // 이번 프레임 목표 탐색 Job을 예약했는지
         private JobHandle _jobHandle;
 
         private float _cooldown;
@@ -68,18 +69,35 @@ namespace aisilol.Game
             _ages = new NativeList<float>(InitialCapacity, Allocator.Persistent);
             _pierces = new NativeList<int>(InitialCapacity, Allocator.Persistent);
             _matrices = new NativeList<Matrix4x4>(InitialCapacity, Allocator.Persistent);
-            _nearest = new NativeReference<int>(Allocator.Persistent);
+            _target = new NativeReference<float4>(Allocator.Persistent);
         }
 
         private void Update()
         {
-            if (!_positions.IsCreated || _positions.Length == 0)
+            _targetScheduled = false;
+
+            if (!_positions.IsCreated || !_player || !_enemies || !_enemies.IsGridScheduled)
                 return;
 
-            if (!_enemies || !_enemies.IsGridScheduled)
+            // 목표는 이번 프레임 시작 위치 기준. LateUpdate에서 Enemy가 제거되어 인덱스가 바뀌므로 위치를 저장
+            var targetHandle = new FindNearestJob
+            {
+                positions = _enemies.Positions,
+                grid = _enemies.Grid,
+                inverseCellSize = _enemies.InverseCellSize,
+                origin = ((float3)_player.transform.position).xz,
+                maxDistance = _stats.Get(StatType.Range),
+                result = _target,
+            }.Schedule(_enemies.GridHandle);
+
+            _targetScheduled = true;
+            _jobHandle = targetHandle;
+            _enemies.AddDependency(targetHandle);
+
+            if (_positions.Length == 0)
                 return;
 
-            _jobHandle = new MoveJob
+            var moveHandle = new MoveJob
             {
                 enemyPositions = _enemies.Positions,
                 grid = _enemies.Grid,
@@ -96,9 +114,10 @@ namespace aisilol.Game
                 rotation = _mesh.Rotation,
                 scale = _mesh.Scale,
                 deltaTime = Time.deltaTime,
-            }.Schedule(_positions.Length, JobBatchCount, _enemies.GridHandle);
+            }.Schedule(_positions.Length, JobBatchCount, _enemies.DamageDependency);
 
-            _enemies.AddDependency(_jobHandle);
+            _jobHandle = JobHandle.CombineDependencies(targetHandle, moveHandle);
+            _enemies.AddDamageWriter(moveHandle);
         }
 
         private void LateUpdate()
@@ -112,6 +131,7 @@ namespace aisilol.Game
             Fire(Time.deltaTime);
 
             ProjectileCount = _positions.Length;
+            _renderer.UseGpu = _enemies && _enemies.UseGpuRendering;
             _renderer.Render(_matrices.AsArray(), _enemies ? _enemies.CullingCamera : null);
         }
 
@@ -138,8 +158,8 @@ namespace aisilol.Game
             if (_matrices.IsCreated)
                 _matrices.Dispose();
 
-            if (_nearest.IsCreated)
-                _nearest.Dispose();
+            if (_target.IsCreated)
+                _target.Dispose();
 
             _renderer?.Dispose();
             _renderer = null;
@@ -164,30 +184,18 @@ namespace aisilol.Game
         private void Fire(float deltaTime)
         {
             _cooldown -= deltaTime;
-            if (_cooldown > 0 || !_player || !_enemies || !_enemies.IsReady || _enemies.EnemyCount == 0)
+            // 사거리 안에 Enemy가 없으면 대기하다가 들어오는 즉시 발사
+            if (_cooldown > 0 || !_player || !_targetScheduled || _target.Value.w <= 0)
                 return;
 
             var origin = (float3)_player.transform.position;
             var range = _stats.Get(StatType.Range);
-            var enemyPositions = _enemies.Positions;
-
-            new FindNearestJob
-            {
-                positions = enemyPositions,
-                origin = origin.xz,
-                maxDistance = range,
-                result = _nearest,
-            }.Run();
-
-            // 사거리 안에 Enemy가 없으면 대기하다가 들어오는 즉시 발사
-            if (_nearest.Value < 0)
-                return;
 
             var speed = _stats.Get(StatType.ProjectileSpeed);
             if (speed <= 0)
                 return;
 
-            var target = enemyPositions[_nearest.Value];
+            var target = _target.Value.xyz;
             var direction = math.normalizesafe((target - origin).xz, new float2(0, 1));
             var count = Mathf.Max(1, Mathf.FloorToInt(_stats.Get(StatType.ProjectileCount)));
             var lifetime = range / speed;
@@ -323,31 +331,95 @@ namespace aisilol.Game
             }
         }
 
-        // 사거리 안에서 가장 가까운 Enemy 인덱스. 없으면 -1
+        // 사거리 안에서 가장 가까운 Enemy 위치. 결과 w가 1이면 찾음, 0이면 없음
+        // 격자에서 origin 셀부터 한 겹씩 넓혀 가며 찾고, 남은 바깥 겹이 찾은 거리보다 멀면 중단
+        // 사거리가 커서 검사할 셀 수가 Enemy 수보다 많으면 전체 순회가 더 빠르므로 전체 순회
         [BurstCompile]
         internal struct FindNearestJob : IJob
         {
             [ReadOnly] public NativeArray<float3> positions;
-            public NativeReference<int> result;
+            [ReadOnly] public NativeParallelMultiHashMap<int2, int> grid;
+            public NativeReference<float4> result;
+            public float inverseCellSize;
             public float2 origin;
             public float maxDistance;
 
             public void Execute()
             {
-                var nearest = -1;
-                var nearestSqr = maxDistance * maxDistance;
-
-                for (var index = 0; index < positions.Length; index++)
+                var visitor = new NearestVisitor
                 {
-                    var sqrDistance = math.distancesq(positions[index].xz, origin);
-                    if (sqrDistance > nearestSqr)
-                        continue;
+                    positions = positions,
+                    origin = origin,
+                    nearest = -1,
+                    nearestSqr = maxDistance * maxDistance,
+                };
 
+                var maxRing = (int)math.min(math.ceil(maxDistance * inverseCellSize), int.MaxValue / 4f);
+                var side = 2L * maxRing + 1;
+                if (side * side > positions.Length)
+                {
+                    for (var index = 0; index < positions.Length; index++)
+                        visitor.Visit(index);
+                }
+                else
+                {
+                    SearchRings(ref visitor, maxRing);
+                }
+
+                result.Value = visitor.nearest >= 0 ? new float4(positions[visitor.nearest], 1) : float4.zero;
+            }
+
+            private void SearchRings(ref NearestVisitor visitor, int maxRing)
+            {
+                var center = SpatialGrid.CellOf(origin, inverseCellSize);
+                var cellSize = 1 / inverseCellSize;
+
+                for (var ring = 0; ring <= maxRing; ring++)
+                {
+                    if (ring == 0)
+                    {
+                        SpatialGrid.VisitCell(grid, center, ref visitor);
+                    }
+                    else
+                    {
+                        for (var x = -ring; x <= ring; x++)
+                        {
+                            SpatialGrid.VisitCell(grid, center + new int2(x, -ring), ref visitor);
+                            SpatialGrid.VisitCell(grid, center + new int2(x, ring), ref visitor);
+                        }
+
+                        for (var y = -ring + 1; y < ring; y++)
+                        {
+                            SpatialGrid.VisitCell(grid, center + new int2(-ring, y), ref visitor);
+                            SpatialGrid.VisitCell(grid, center + new int2(ring, y), ref visitor);
+                        }
+                    }
+
+                    // 다음 겹의 셀은 origin에서 최소 ring * cellSize 떨어져 있음
+                    var boundary = ring * cellSize;
+                    if (visitor.nearest >= 0 && visitor.nearestSqr <= boundary * boundary)
+                        return;
+                }
+            }
+        }
+
+        internal struct NearestVisitor : SpatialGrid.IVisitor
+        {
+            public NativeArray<float3> positions;
+            public float2 origin;
+            public int nearest;
+            public float nearestSqr;
+
+            public bool Visit(int index)
+            {
+                var sqrDistance = math.distancesq(positions[index].xz, origin);
+                if (sqrDistance <= nearestSqr)
+                {
                     nearest = index;
                     nearestSqr = sqrDistance;
                 }
 
-                result.Value = nearest;
+                return true;
             }
         }
     }

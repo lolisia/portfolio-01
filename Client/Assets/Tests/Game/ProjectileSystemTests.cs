@@ -295,19 +295,68 @@ namespace aisilol.Tests.Game
             Assert.AreEqual(0.5f, result.lifetime, 1e-5f);
         }
 
-        [Test]
-        public void FindNearestJob_ReturnsNearestWithinRange()
+        // 셀 크기 1m 격자로 FindNearestJob 실행. 결과 w가 0이면 찾지 못함
+        private static float4 RunFindNearest(float3[] enemyPositions, float2 origin, float maxDistance)
         {
-            using var positions = new NativeArray<float3>(new[] { new float3(5, 0, 0), new float3(0, 0, -2), new float3(3, 0, 0) }, Allocator.TempJob);
-            using var result = new NativeReference<int>(Allocator.TempJob);
+            using var positions = new NativeArray<float3>(enemyPositions, Allocator.TempJob);
+            using var grid = new NativeParallelMultiHashMap<int2, int>(enemyPositions.Length, Allocator.TempJob);
+            using var result = new NativeReference<float4>(Allocator.TempJob);
 
-            var job = new ProjectileSystem.FindNearestJob { positions = positions, result = result, origin = float2.zero, maxDistance = 10 };
-            job.Run();
-            Assert.AreEqual(1, result.Value);
+            new SpatialGrid.BuildJob { positions = positions, grid = grid.AsParallelWriter(), inverseCellSize = 1 }.Run(positions.Length);
+            new ProjectileSystem.FindNearestJob
+            {
+                positions = positions,
+                grid = grid,
+                inverseCellSize = 1,
+                origin = origin,
+                maxDistance = maxDistance,
+                result = result,
+            }.Run();
 
-            job.maxDistance = 1;
-            job.Run();
-            Assert.AreEqual(-1, result.Value);
+            return result.Value;
+        }
+
+        // 검사할 셀 수(사거리 3m → 7 x 7)보다 Enemy가 많아 격자 검색을 사용하도록 멀리 채움
+        private static float3[] WithFarEnemies(params float3[] near)
+        {
+            return near.Concat(Enumerable.Range(0, 60).Select(index => new float3(100 + index, 0, 100))).ToArray();
+        }
+
+        [Test]
+        public void FindNearestJob_FewEnemies_ScansAllAndReturnsNearestWithinRange()
+        {
+            var positions = new[] { new float3(5, 0, 0), new float3(0, 1, -2), new float3(3, 0, 0) };
+
+            var found = RunFindNearest(positions, float2.zero, 10);
+            Assert.Greater(found.w, 0.5f);
+            Assert.AreEqual(new float3(0, 1, -2), found.xyz);
+
+            Assert.Less(RunFindNearest(positions, float2.zero, 1).w, 0.5f);
+        }
+
+        [Test]
+        public void FindNearestJob_ManyEnemies_SearchesGridRings()
+        {
+            var found = RunFindNearest(WithFarEnemies(new float3(2.5f, 0, 0.5f), new float3(1.2f, 0, 1.5f)), new float2(0.5f, 0.5f), 3);
+
+            Assert.Greater(found.w, 0.5f);
+            Assert.AreEqual(new float3(1.2f, 0, 1.5f), found.xyz);
+        }
+
+        [Test]
+        public void FindNearestJob_CloserEnemyInOuterRing_KeepsSearching()
+        {
+            // 1번째 겹(-1 셀)에서 1.85m 떨어진 Enemy를 찾아도, 2번째 겹(2 셀)에 1.05m인 Enemy가 있으므로 계속 검색
+            var found = RunFindNearest(WithFarEnemies(new float3(-0.9f, 0, 0.5f), new float3(2, 0, 0.5f)), new float2(0.95f, 0.5f), 3);
+
+            Assert.Greater(found.w, 0.5f);
+            Assert.AreEqual(new float3(2, 0, 0.5f), found.xyz);
+        }
+
+        [Test]
+        public void FindNearestJob_ManyEnemiesNoneInRange_ReturnsNotFound()
+        {
+            Assert.Less(RunFindNearest(WithFarEnemies(new float3(5, 0, 0)), float2.zero, 3).w, 0.5f);
         }
     }
 }
