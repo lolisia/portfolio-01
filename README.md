@@ -29,9 +29,9 @@
 - 피격 표시는 같은 Mesh에 피격 색 Material을 쓰는 렌더링 그룹으로 분리
 
 **렌더링** ([InstanceRenderer.cs](Client/Assets/Scripts/aisilol/Game/InstanceRenderer.cs), [GpuInstanceRenderer.cs](Client/Assets/Scripts/aisilol/Game/GpuInstanceRenderer.cs))
-- Enemy / 투사체 / 드롭 / 칼날 공용. GameManager의 `GPU 렌더링` 옵션으로 두 경로 전환. HUD에 현재 경로 표시
+- Enemy / 투사체 / 드롭 / 칼날 공용. GameManager 옵션으로 두 경로 전환
 - GPU 경로: 행렬을 `GraphicsBuffer`로 올리고 Compute Shader([InstanceCulling.compute](Client/Assets/Resources/Shaders/InstanceCulling.compute))가 시야 판정 + 그룹별 수집 후 `Graphics.RenderMeshIndirect`로 그룹당 1회 렌더링. 보이는 수는 `AsyncGPUReadback`으로 받음
-- GPU 경로 Shader([InstancedIndirect.shader](Client/Assets/Resources/Shaders/InstancedIndirect.shader))에서 정점 애니메이션. Enemy는 위치 기반 위상으로 튀어 오르며 찌그러지고, 드롭과 칼날은 회전
+- GPU 경로 Shader([InstancedIndirect.shader](Client/Assets/Resources/Shaders/InstancedIndirect.shader))에서 정점 애니메이션. 인스턴스별 위상은 위치에서 계산
 - CPU 경로: Burst Job으로 시야 판정 / 그룹 정렬 후 `Graphics.RenderMeshInstanced`로 1023개씩 렌더링 ([InstancedMesh.cs](Client/Assets/Scripts/aisilol/Game/InstancedMesh.cs))
 - 그래픽 장치가 없거나(-nographics) Compute Shader를 지원하지 않으면 CPU 경로 사용
 
@@ -39,28 +39,24 @@
 - 투사체도 GameObject 없이 데이터로 처리
 - 목표 탐색은 격자에서 플레이어 셀부터 한 겹씩 넓혀 가며 찾고, 남은 겹이 찾은 거리보다 멀면 중단. 검사할 셀이 Enemy 수보다 많으면 전체 순회
 - 이동 + 충돌은 Burst `IJobParallelFor`. 한 프레임 이동 구간(선분)으로 판정해서 빠른 투사체도 Enemy를 건너뛰지 않음
-- 관통 수만큼 구간 위의 Enemy를 가까운 순서로 판정
+- 구간 위의 Enemy를 거리순으로 정렬해 판정
 - 맞힌 Enemy는 `NativeQueue` 데미지 큐에 기록하고, EnemyManager가 LateUpdate에서 일괄 적용. 데미지를 기록하는 Job끼리는 순서대로 연결
 
 **무기** ([WeaponSystem.cs](Client/Assets/Scripts/aisilol/Game/WeaponSystem.cs))
 - 오라 / 칼날 / 연쇄 번개 모두 Enemy 격자를 검색하는 Burst Job. 피해는 데미지 큐에 기록
-- 오라: 반경 안 Enemy 검색
-- 칼날: 칼날마다 `IJobParallelFor`
-- 연쇄 번개: 맞힌 Enemy를 제외하고 가장 가까운 Enemy를 반복 검색
+- 칼날은 칼날마다 `IJobParallelFor`, 연쇄 번개는 이미 맞힌 Enemy를 제외한 최근접 검색 반복
 
 **드롭** ([PickupSystem.cs](Client/Assets/Scripts/aisilol/Game/PickupSystem.cs))
 - 드롭도 GameObject 없이 데이터로 처리. 이동 / 획득 판정은 Burst Job
-- 가까이 모인 같은 단계의 경험치 Object를 다음 단계 1개로 병합. 셀 + 단계로 정렬 후 묶음 처리
-- Object 수가 상한을 넘으면 병합 범위를 넓혀 다시 병합하고, 그래도 넘으면 위치와 관계없이 같은 단계끼리 병합
+- Object 수를 줄이기 위해 가까운 Object를 병합. 셀 + 단계 키로 정렬 후 묶음 처리
 - 드롭 생성 / 획득 / 제거는 Burst `IJob`
 
-**능력치** ([PlayerStats.cs](Client/Assets/Scripts/aisilol/Game/PlayerStats.cs), [UpgradeDefinition.cs](Client/Assets/Scripts/aisilol/Game/UpgradeDefinition.cs))
-- 강화는 ScriptableObject 에셋([Data/Upgrades](Client/Assets/Data/Upgrades)). 능력치 / 적용 방식(Add, Percent) / 값 / 최대 레벨만 입력
-- 능력치 = (기본값 + Add 합) * (1 + Percent 합)
+**데이터** ([PlayerStats.cs](Client/Assets/Scripts/aisilol/Game/PlayerStats.cs), [UpgradeDefinition.cs](Client/Assets/Scripts/aisilol/Game/UpgradeDefinition.cs))
+- 강화 정의는 ScriptableObject 에셋([Data/Upgrades](Client/Assets/Data/Upgrades))
 
 **게임 진행** ([GameManager.cs](Client/Assets/Scripts/aisilol/Game/GameManager.cs), [GameHud.cs](Client/Assets/Scripts/aisilol/Game/GameHud.cs))
-- Playing / LevelUp / GameOver 상태
-- HUD(체력/경험치 바, 선택지, 결과 화면)는 uGUI를 코드로 구성
+- 상태 머신으로 진행 관리
+- HUD는 uGUI를 코드로 구성
 
 **Floor** ([FloorManager.cs](Client/Assets/Scripts/aisilol/Game/FloorManager.cs))
 - 카메라 Frustum에 걸리는 타일만 배치, 벗어난 타일은 Pool로 재사용
